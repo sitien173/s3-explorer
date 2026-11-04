@@ -1,0 +1,25 @@
+[default]
+region = us-east-1
+endpoint_url = http://127.0.0.1:19000
+
+[profile static-keys]
+region = us-west-2
+
+[profile endpoint-profile]
+region = us-east-1
+endpoint_url = http://127.0.0.1:19001
+
+[profile sso-dev]
+sso_session = corp
+sso_account_id = 123456789012
+sso_role_name = Developer
+region = us-east-2
+
+[sso-session corp]
+sso_start_url = https://example.awsapps.com/start
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+
+[profile assume]
+role_arn = arn:aws:iam::123456789012:role/example
+source_profile = default

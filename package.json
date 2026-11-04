@@ -1,0 +1,44 @@
+{
+  "name": "s3-media-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Linux desktop app for browsing, managing, and streaming S3 media.",
+  "author": "S3 Media Explorer Maintainers <maintainers@example.invalid>",
+  "homepage": "https://example.invalid/s3-media-explorer",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "typecheck": "tsc -b tsconfig.node.json tsconfig.web.json",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "build": "electron-vite build",
+    "dist": "electron-vite build && electron-builder --linux AppImage deb",
+    "e2e": "playwright test",
+    "dev": "electron-vite dev",
+    "seek:2gb": "jiti scripts/seek-2gb.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/lib-storage": "3.1161.0",
+    "@aws-sdk/s3-request-presigner": "3.1161.0",
+    "@smithy/shared-ini-file-loader": "4.7.2",
+    "@tanstack/react-virtual": "3.14.25",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
+    "electron-vite": "6.0.0",
+    "jiti": "2.7.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
+  }
+}

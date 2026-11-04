@@ -1,0 +1,12 @@
+services:
+  rustfs:
+    image: rustfs/rustfs:1.0.4
+    command: ["server", "/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_ADDRESS: ":9000"
+    ports:
+      - "127.0.0.1:19000:9000"
+    tmpfs:
+      - /data:mode=1777

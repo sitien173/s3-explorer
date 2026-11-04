@@ -1,0 +1,13 @@
+packages:
+  - .
+allowBuilds:
+  electron: true
+  esbuild: false
+  sharp: false
+  '@swc/core': false
+  core-js: false
+  electron-winstaller: false
+minimumReleaseAgeExclude:
+  - '@vitest/mocker@5.1.0'
+  - '@vitest/spy@5.1.0'
+  - vitest@5.1.0

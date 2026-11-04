@@ -1,0 +1,17 @@
+appId: com.s3mediaexplorer.app
+productName: S3 Media Explorer
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  maintainer: S3 Media Explorer Maintainers <maintainers@example.invalid>
+  icon: build/icon.png
+deb:
+  depends:
+    - libsecret-1-0
