@@ -145,10 +145,21 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: var(--gap-xs);
 	padding: var(--padding-xs) var(--padding-sm);
 }
 
+.app-connection-header .app-connection-name-btn {
+	flex: 1 1 auto;
+	width: auto;
+	min-width: 0;
+}
+
 .app-connection-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: var(--font-size-sm);
 	font-weight: var(--font-weight-medium);
 	color: var(--text-default);
@@ -159,6 +170,7 @@ body {
 }
 
 .app-connection-actions {
+	flex-shrink: 0;
 	display: flex;
 	align-items: center;
 	gap: var(--gap-xs);
