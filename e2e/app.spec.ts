@@ -21,6 +21,7 @@ test("browses, streams, uploads, renames, and deletes RustFS objects", async ({
 	const { electronApp, page, s3, bucket, uploadPath } = e2e;
 
 	await page.getByRole("button", { name: "Add connection" }).click();
+	await page.screenshot({ path: "test-results/phase-01-after-connection-dialog.png" });
 	const connectionDialog = page.getByRole("dialog", {
 		name: "Add connection",
 	});
@@ -49,23 +50,30 @@ test("browses, streams, uploads, renames, and deletes RustFS objects", async ({
 	await expect(page.getByText("Session-only storage active")).toBeVisible();
 
 	await page
-		.locator(".app-connection-name-btn")
-		.filter({ hasText: "RustFS E2E" })
+		.getByRole("button", { name: "RustFS E2E manual", exact: true })
 		.click();
 	await page.getByRole("button", { name: bucket, exact: true }).click();
+	await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--color-neutral-100").trim())).toBe("#172d2d");
+	await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--radius-md").trim().replace(/^\./, "0."))).toBe("0.375rem");
+	await expect.poll(() => page.evaluate(() => {
+		const probe = document.createElement("div");
+		probe.style.backgroundColor = "var(--surface-neutral-01)";
+		document.body.append(probe);
+		const resolved = getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		return getComputedStyle(document.body).backgroundColor === resolved;
+	})).toBe(true);
+	await page.screenshot({ path: "test-results/phase-01-after-main.png" });
 
-	const seededFolder = page
-		.locator(".app-row-name")
-		.filter({ hasText: "seeded" });
+	const grid = page.getByRole("grid");
+	const seededFolder = grid.getByRole("row", { name: /seeded/ });
 	await expect(seededFolder).toBeVisible();
 	await seededFolder.dblclick();
-	await expect(page.locator(".tds-breadcrumbs")).toContainText("seeded");
+	await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("seeded");
 
-	const video = page.locator(".app-viewer video");
-	await page
-		.locator(".app-row-name")
-		.filter({ hasText: "faststart.mp4" })
-		.click();
+	const viewer = page.getByRole("region", { name: "Object preview" });
+	const video = viewer.locator("video");
+	await grid.getByRole("row", { name: /faststart\.mp4/ }).click();
 	await expect(video).toBeVisible();
 	await expect
 		.poll(() =>
@@ -119,8 +127,8 @@ test("browses, streams, uploads, renames, and deletes RustFS objects", async ({
 		.inputValue();
 	expect(signingConnection).not.toBe("anonymous");
 	await openUrlDialog.getByRole("button", { name: "Open", exact: true }).click();
-	await expect(page.locator(".app-viewer")).toContainText("faststart.mp4");
-	await expect(page.locator(".app-viewer video")).toBeVisible();
+	await expect(viewer).toContainText("faststart.mp4");
+	await expect(video).toBeVisible();
 
 	await electronApp.evaluate(({ dialog }, path) => {
 		dialog.showOpenDialog = async () => ({
@@ -133,12 +141,11 @@ test("browses, streams, uploads, renames, and deletes RustFS objects", async ({
 	await expect
 		.poll(() => objectExists(s3, bucket, uploadedKey), { timeout: 20_000 })
 		.toBe(true);
+	await expect(page.getByText(/Uploaded seeded\/upload-me\.txt/i)).toBeVisible();
 
-	await page
-		.locator(".app-row-name")
-		.filter({ hasText: "upload-me.txt" })
-		.click();
-	await page.getByRole("button", { name: "Rename or move" }).click();
+	const uploadedRow = grid.getByRole("row", { name: /upload-me\.txt/ });
+	await uploadedRow.click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Rename or move" }).click();
 	const renameDialog = page.getByRole("dialog", {
 		name: "Rename or move object",
 	});
@@ -154,12 +161,11 @@ test("browses, streams, uploads, renames, and deletes RustFS objects", async ({
 		.poll(() => objectExists(s3, bucket, uploadedKey), { timeout: 20_000 })
 		.toBe(false);
 
-	await page
-		.locator(".app-row-name")
-		.filter({ hasText: "renamed-by-e2e.txt" })
-		.click();
-	await page.getByRole("button", { name: "Delete", exact: true }).click();
-	const deleteDialog = page.getByRole("dialog", { name: "Delete object" });
+	const renamedRow = grid.getByRole("row", { name: /renamed-by-e2e\.txt/ });
+	await renamedRow.click();
+	await grid.focus();
+	await page.keyboard.press("Delete");
+	const deleteDialog = page.getByRole("alertdialog", { name: "Delete object" });
 	await deleteDialog.getByRole("button", { name: "Delete" }).click();
 	await expect
 		.poll(() => objectExists(s3, bucket, renamedKey), { timeout: 20_000 })

@@ -1,5 +1,6 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 
 export default defineConfig(({ command }) => ({
@@ -12,6 +13,7 @@ export default defineConfig(({ command }) => ({
     server: { port: 5173, strictPort: true },
     resolve: { alias: { '@': resolve('src/renderer/src') } },
     plugins: [
+      tailwindcss(),
       ...(command === 'serve' ? [] : [react()]),
       ...(command === 'serve' ? [{
         name: 'dev-csp-meta',

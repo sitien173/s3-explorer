@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import {
 	useEffect,
 	useId,
@@ -6,7 +7,7 @@ import {
 	type JSX,
 } from "react";
 import { api, unwrap } from "../api";
-import { Dialog } from "./Dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 export interface AddBucketDialogProps {
 	isOpen: boolean;
@@ -76,24 +77,24 @@ export function AddBucketDialog({
 
 	const footer = (
 		<>
-			<button
+			<Button
 				type="button"
-				className="tds-btn tds-btn--md tds-btn--secondary"
+				variant="secondary"
 				onClick={onClose}
 				disabled={saving}
 			>
 				Cancel
-			</button>
-			<button
+			</Button>
+			<Button
 				type="button"
-				className="tds-btn tds-btn--md tds-btn--primary"
+				variant="default"
 				disabled={saving}
 				onClick={() => {
 					void handleSubmit();
 				}}
 			>
 				{saving ? "Adding..." : "Add bucket"}
-			</button>
+			</Button>
 		</>
 	);
 

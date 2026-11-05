@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import {
 	useEffect,
 	useId,
@@ -12,7 +13,7 @@ import {
 	buildUpdateRequest,
 	type ConnectionFormState,
 } from "../format";
-import { Dialog } from "./Dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 export type ConnectionView = CreateResponse;
 
@@ -224,36 +225,36 @@ export function ConnectionDialog({
 	const footer = (
 		<>
 			{isEdit && (
-				<button
+				<Button
 					type="button"
-					className="tds-btn tds-btn--md tds-btn--secondary"
+					variant="secondary"
 					disabled={testing || saving}
 					onClick={() => {
 						void handleTestConnection();
 					}}
 				>
 					{testing ? "Testing..." : "Test connection"}
-				</button>
+				</Button>
 			)}
 			<div className="app-dialog-primary-actions">
-				<button
+				<Button
 					type="button"
-					className="tds-btn tds-btn--md tds-btn--secondary"
+					variant="secondary"
 					onClick={onClose}
 					disabled={saving}
 				>
 					Cancel
-				</button>
-				<button
+				</Button>
+				<Button
 					type="button"
-					className="tds-btn tds-btn--md tds-btn--primary"
+					variant="default"
 					disabled={saving}
 					onClick={() => {
 						void handleSubmit();
 					}}
 				>
 					{saving ? "Saving..." : "Save connection"}
-				</button>
+				</Button>
 			</div>
 		</>
 	);
@@ -274,9 +275,10 @@ export function ConnectionDialog({
 			)}
 
 			<div className="app-dialog-kind-selector">
-				<button
+				<Button
 					type="button"
-					className={`tds-btn tds-btn--sm ${form.kind === "profile" ? "tds-btn--primary" : "tds-btn--secondary"}`}
+					size="sm"
+					variant={form.kind === "profile" ? "default" : "secondary"}
 					aria-pressed={form.kind === "profile"}
 					onClick={() => {
 						setForm((prev) => ({
@@ -286,10 +288,11 @@ export function ConnectionDialog({
 					}}
 				>
 					AWS Profile / SSO
-				</button>
-				<button
+				</Button>
+				<Button
 					type="button"
-					className={`tds-btn tds-btn--sm ${form.kind === "manual" ? "tds-btn--primary" : "tds-btn--secondary"}`}
+					size="sm"
+					variant={form.kind === "manual" ? "default" : "secondary"}
 					aria-pressed={form.kind === "manual"}
 					onClick={() => {
 						setForm((prev) => ({
@@ -299,7 +302,7 @@ export function ConnectionDialog({
 					}}
 				>
 					Manual Credentials
-				</button>
+				</Button>
 			</div>
 
 			<div

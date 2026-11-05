@@ -6,7 +6,7 @@ import {
 import { join } from "node:path";
 
 export const CSP = [
-	"default-src 'self'; script-src 'self'; style-src 'self';",
+	"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';",
 	"img-src 'self' data: http://127.0.0.1:*;",
 	"media-src 'self' http://127.0.0.1:*;",
 	"connect-src 'self' http://127.0.0.1:*;",

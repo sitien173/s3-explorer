@@ -2,6 +2,7 @@ import {
 	useEffect,
 	useId,
 	useMemo,
+	useReducer,
 	useRef,
 	useState,
 	type FormEvent,
@@ -14,7 +15,10 @@ import {
 	ConnectionDialog,
 	type ConnectionView,
 } from "./components/ConnectionDialog";
-import { Dialog } from "./components/Dialog";
+import { Dialog } from "./components/ui/dialog";
+import { AppShell } from "./components/AppShell";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./components/ui/empty";
+import { Alert } from "./components/ui/alert";
 import { ObjectTable } from "./components/ObjectTable";
 import { OpenUrlDialog } from "./components/OpenUrlDialog";
 import { OperationReport } from "./components/OperationReport";
@@ -31,6 +35,9 @@ import {
 } from "./components/TransfersDrawer";
 import { Viewer, type ViewerTarget } from "./components/Viewer";
 import type { BrowserRow, S3Item } from "./format";
+import { initialSelection, selectionReducer } from "./selection";
+import { Toaster } from "./components/ui/sonner";
+import { notify, shouldNotifyTransferTerminal } from "./toasts";
 
 export interface TransferMeta {
 	kind: "upload" | "download";
@@ -170,8 +177,6 @@ export default function App(): JSX.Element {
 	const [refreshKey, setRefreshKey] = useState<number>(0);
 	const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 	const [sessionWarning, setSessionWarning] = useState<boolean>(false);
-	const [rejectedUploadCount, setRejectedUploadCount] = useState<number>(0);
-	const [appError, setAppError] = useState<string | null>(null);
 
 	const newFolderInputId = useId();
 
@@ -181,7 +186,32 @@ export default function App(): JSX.Element {
 	);
 
 	const [viewerTarget, setViewerTarget] = useState<ViewerTarget | null>(null);
-	const [selectedItem, setSelectedItem] = useState<BrowserRow | null>(null);
+	const [selection, dispatchSelection] = useReducer(selectionReducer, initialSelection);
+	const selectedRowsRef = useRef<Map<string, BrowserRow>>(new Map());
+	const selectedItem =
+		selection.selected.length === 1
+			? selectedRowsRef.current.get(selection.selected[0]) ?? null
+			: null;
+	const selectedItems = useMemo(
+		() =>
+			selection.selected
+				.map((key) => selectedRowsRef.current.get(key))
+				.filter((row): row is BrowserRow => Boolean(row)),
+		[selection.selected],
+	);
+	const hasFolderSelected = useMemo(
+		() => selectedItems.some((item) => item.kind === "folder"),
+		[selectedItems],
+	);
+	const setSelectedItem = (row: BrowserRow | null): void => {
+		if (row) {
+			const key = row.kind === "folder" ? row.prefix : row.key;
+			selectedRowsRef.current.set(key, row);
+			dispatchSelection({ type: "select", key, keys: [key] });
+		} else {
+			dispatchSelection({ type: "reset" });
+		}
+	};
 
 	const [isUrlDialogOpen, setIsUrlDialogOpen] = useState<boolean>(false);
 	const [isNewFolderOpen, setIsNewFolderOpen] = useState<boolean>(false);
@@ -199,12 +229,13 @@ export default function App(): JSX.Element {
 
 	const [transfers, setTransfers] = useState<TransferRecord[]>([]);
 	const [isTransfersDrawerOpen, setIsTransfersDrawerOpen] =
-		useState<boolean>(true);
+		useState<boolean>(false);
 	const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
 
 	const selectedBucketRef = useRef<string | null>(selectedBucket);
 	const selectedPrefixRef = useRef<string>(selectedPrefix);
 	const transferMetaMapRef = useRef<Map<string, TransferMeta>>(new Map());
+	const terminalTransferIdsRef = useRef(new Set<string>());
 
 	useEffect(() => {
 		selectedBucketRef.current = selectedBucket;
@@ -245,6 +276,17 @@ export default function App(): JSX.Element {
 			transferMetaMapRef.current.delete(payload.transferId);
 
 			setTransfers((prev) => updateTransfersOnDone(prev, payload, meta));
+
+			const kind = meta?.kind;
+			const key = meta?.key;
+			const firstTerminalEvent = shouldNotifyTransferTerminal(terminalTransferIdsRef.current, payload.transferId);
+
+			if (firstTerminalEvent && meta && key && payload.status === "completed") {
+				if (kind === "upload") notify.uploadDone(key);
+				else if (kind === "download") notify.downloadDone(key);
+			} else if (firstTerminalEvent && meta && key && payload.status === "failed") {
+				notify.transferFailed(key);
+			}
 
 			if (
 				meta &&
@@ -324,14 +366,7 @@ export default function App(): JSX.Element {
 			return;
 		}
 		const name = item.key.split("/").pop() || item.key;
-		setSelectedItem({
-			kind: "object",
-			key: item.key,
-			name,
-			size: item.size,
-			lastModified: item.lastModified,
-			etag: item.etag,
-		});
+		selectedRowsRef.current.set(item.key, { kind: "object", key: item.key, name, size: item.size, lastModified: item.lastModified, etag: item.etag });
 		setViewerTarget({
 			kind: "s3",
 			connectionId: selectedConnectionId,
@@ -342,7 +377,7 @@ export default function App(): JSX.Element {
 	}
 
 	function handleSelectRow(row: BrowserRow): void {
-		setSelectedItem(row);
+		selectedRowsRef.current.set(row.kind === "folder" ? row.prefix : row.key, row);
 		if (row.kind === "folder") {
 			setViewerTarget(null);
 		}
@@ -379,7 +414,7 @@ export default function App(): JSX.Element {
 		} catch (err: unknown) {
 			const message =
 				err instanceof Error ? err.message : "Failed to upload file";
-			setAppError(message);
+			notify.operationFailed("Upload", message);
 		}
 	}
 
@@ -396,12 +431,30 @@ export default function App(): JSX.Element {
 			});
 			const data = unwrap(res);
 			if (data.rejectedCount > 0) {
-				setRejectedUploadCount(data.rejectedCount);
+				notify.rejectedUploads(data.rejectedCount);
 			}
 		} catch (err: unknown) {
 			const message =
 				err instanceof Error ? err.message : "Failed to upload files";
-			setAppError(message);
+			notify.operationFailed("Upload", message);
+		}
+	}
+
+	async function handleOpenWithSystemApp(item: S3Item): Promise<void> {
+		if (!selectedConnectionId || !selectedBucket) return;
+		try {
+			const stream = unwrap(await api.stream.open({
+				connectionId: selectedConnectionId,
+				bucket: selectedBucket,
+				key: item.key,
+			}));
+			unwrap(await api.files.openWithSystemApp({
+				url: stream.url,
+				fileName: item.key.split("/").pop() || item.key,
+			}));
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : "Failed to open object";
+			notify.operationFailed("Open with system app", message);
 		}
 	}
 
@@ -423,7 +476,7 @@ export default function App(): JSX.Element {
 		} catch (err: unknown) {
 			const message =
 				err instanceof Error ? err.message : "Failed to download object";
-			setAppError(message);
+			notify.operationFailed("Download", message);
 		}
 	}
 
@@ -436,7 +489,7 @@ export default function App(): JSX.Element {
 				err instanceof Error
 					? err.message
 					: "Failed to cancel transfer";
-			setAppError(message);
+			notify.operationFailed("Cancel transfer", message);
 		}
 	}
 
@@ -481,16 +534,18 @@ export default function App(): JSX.Element {
 			setIsNewFolderOpen(false);
 			setNewFolderName("");
 			setRefreshTrigger((k) => k + 1);
+			notify.folderCreated(trimmed);
 		} catch (err: unknown) {
 			const message =
 				err instanceof Error ? err.message : "Failed to create folder";
+			notify.operationFailed("Create folder", message);
 			setNewFolderError(message);
 		} finally {
 			setNewFolderSubmitting(false);
 		}
 	}
 
-	function handleRenameSuccess(report?: RenameResultReport): void {
+	function handleRenameSuccess(report?: RenameResultReport, destinationKey?: string): void {
 		setRefreshTrigger((k) => k + 1);
 		setViewerTarget((current) =>
 			shouldClearViewerTarget(
@@ -502,11 +557,25 @@ export default function App(): JSX.Element {
 				? null
 				: current,
 		);
+		const targetName = destinationKey ?? "item";
 		setSelectedItem(null);
 		if (report) {
 			setOperationReport(report);
 			setReportTitle("Rename report");
 			setIsReportOpen(true);
+			notify.partialFailure(
+				{
+					completedCount: report.completedCount,
+					remainingCount: report.remainingKeys.length,
+				},
+				() => {
+					setOperationReport(report);
+					setReportTitle("Rename report");
+					setIsReportOpen(true);
+				},
+			);
+		} else {
+			notify.renameDone(targetName);
 		}
 	}
 
@@ -522,11 +591,34 @@ export default function App(): JSX.Element {
 				? null
 				: current,
 		);
+		const count = selectedItems.length;
+		const singleName = selectedItems[0]
+			? selectedItems[0].kind === "object"
+				? selectedItems[0].name
+				: selectedItems[0].prefix
+			: selectedItem
+				? selectedItem.kind === "object"
+					? selectedItem.name
+					: selectedItem.prefix
+				: "item";
 		setSelectedItem(null);
 		if (report) {
 			setOperationReport(report);
 			setReportTitle("Delete report");
 			setIsReportOpen(true);
+			notify.partialFailure(
+				{
+					completedCount: report.completedCount,
+					remainingCount: report.remainingKeys.length,
+				},
+				() => {
+					setOperationReport(report);
+					setReportTitle("Delete report");
+					setIsReportOpen(true);
+				},
+			);
+		} else {
+			notify.deleteDone(count > 1 ? count : singleName);
 		}
 	}
 
@@ -535,17 +627,11 @@ export default function App(): JSX.Element {
 		setRefreshKey((k) => k + 1);
 	}
 
-	const activeSelectedRowKey = selectedItem
-		? selectedItem.kind === "folder"
-			? selectedItem.prefix
-			: selectedItem.key
-		: viewerTarget?.kind === "s3"
-			? viewerTarget.key
-			: null;
-
 	return (
-		<div className="app-shell">
-			<Sidebar
+		<>
+		<Toaster />
+		<AppShell
+			sidebar={<Sidebar
 				selectedConnectionId={selectedConnectionId}
 				selectedBucket={selectedBucket}
 				onSelectConnection={handleSelectConnection}
@@ -553,11 +639,10 @@ export default function App(): JSX.Element {
 				onOpenAddConnection={handleOpenAddConnection}
 				onOpenEditConnection={handleOpenEditConnection}
 				refreshKey={refreshKey}
-			/>
-
-			<main className="app-main">
+			/>}
+			main={<main className="app-main">
 				{sessionWarning && (
-					<div className="tds-announcement tds-announcement--warning app-main-banner">
+					<Alert className="tds-announcement--warning app-main-banner">
 						<div className="tds-announcement__content">
 							<div className="tds-announcement__title">
 								Session-only storage active
@@ -579,53 +664,7 @@ export default function App(): JSX.Element {
 								Dismiss
 							</button>
 						</div>
-					</div>
-				)}
-
-				{rejectedUploadCount > 0 && (
-					<div className="tds-announcement tds-announcement--warning app-main-banner">
-						<div className="tds-announcement__content">
-							<div className="tds-announcement__title">
-								Some files could not be uploaded
-							</div>
-							<div className="tds-announcement__message">
-								{rejectedUploadCount} file(s) were rejected. Only
-								regular files up to 500 items are accepted.
-							</div>
-						</div>
-						<div className="tds-announcement__actions">
-							<button
-								type="button"
-								className="tds-btn tds-btn--sm tds-btn--secondary"
-								onClick={() => {
-									setRejectedUploadCount(0);
-								}}
-							>
-								Dismiss
-							</button>
-						</div>
-					</div>
-				)}
-
-				{appError && (
-					<div className="tds-announcement tds-announcement--error app-main-banner">
-						<div className="tds-announcement__content">
-							<div className="tds-announcement__message">
-								{appError}
-							</div>
-						</div>
-						<div className="tds-announcement__actions">
-							<button
-								type="button"
-								className="tds-btn tds-btn--sm tds-btn--secondary"
-								onClick={() => {
-									setAppError(null);
-								}}
-							>
-								Dismiss
-							</button>
-						</div>
-					</div>
+					</Alert>
 				)}
 
 				<div className="app-main-content">
@@ -652,6 +691,8 @@ export default function App(): JSX.Element {
 								bucket={selectedBucket}
 								prefix={selectedPrefix}
 								selectedItem={selectedItem}
+								selectedCount={selection.selected.length}
+								hasFolderSelected={hasFolderSelected}
 								onUpload={() => {
 									void handleUpload();
 								}}
@@ -664,10 +705,17 @@ export default function App(): JSX.Element {
 									void handleDownload();
 								}}
 								onRename={() => {
-									setIsRenameOpen(true);
+									if (selection.selected.length === 1) {
+										setIsRenameOpen(true);
+									}
 								}}
 								onDelete={() => {
-									setIsDeleteOpen(true);
+									if (
+										selection.selected.length === 1 ||
+										(selection.selected.length > 1 && !hasFolderSelected)
+									) {
+										setIsDeleteOpen(true);
+									}
 								}}
 								onOpenUrl={() => {
 									setIsUrlDialogOpen(true);
@@ -676,7 +724,7 @@ export default function App(): JSX.Element {
 							/>
 
 							<div
-								className={`app-browser-body ${viewerTarget ? "app-browser-body--with-viewer" : ""} ${isDraggingOver ? "app-table-drag-active" : ""}`}
+								className={`app-browser-body ${isDraggingOver ? "app-table-drag-active" : ""}`}
 								onDragOver={(e) => {
 									e.preventDefault();
 									e.dataTransfer.dropEffect = "copy";
@@ -716,42 +764,61 @@ export default function App(): JSX.Element {
 										onNavigate={handleNavigate}
 										searchResults={searchResults}
 										isSearchActive={isSearchActive}
-										selectedRowKey={activeSelectedRowKey}
+										selectedRowKeys={selection.selected}
+										activeRowKey={selection.active}
+										onSelectionChange={(next) => {
+											dispatchSelection({ type: "replace", state: next });
+										}}
+										onGridAction={(action, row) => {
+											if (row && selection.selected.length <= 1) {
+												setSelectedItem(row);
+											}
+											if (action === "system-open" && row?.kind === "object") {
+												void handleOpenWithSystemApp(row);
+											} else if (action === "download") {
+												void handleDownload();
+											} else if (action === "rename") {
+												if (selection.selected.length === 1) {
+													setIsRenameOpen(true);
+												}
+											} else if (action === "delete") {
+												if (
+													selection.selected.length === 1 ||
+													(selection.selected.length > 1 && !hasFolderSelected)
+												) {
+													setIsDeleteOpen(true);
+												}
+											} else if (action === "parent") {
+												const parts = selectedPrefix
+													.replace(/\/$/, "")
+													.split("/")
+													.filter(Boolean);
+												parts.pop();
+												handleNavigate(parts.length ? `${parts.join("/")}/` : "");
+											}
+										}}
+										onOpenRow={(row) => {
+											if (row.kind === "folder") {
+												handleNavigate(row.prefix);
+											} else {
+												handleSelectObject({
+													key: row.key,
+													size: row.size,
+													lastModified: row.lastModified,
+													etag: row.etag,
+												});
+											}
+										}}
 										onSelectObject={handleSelectObject}
 										onSelectRow={handleSelectRow}
 										refreshTrigger={refreshTrigger}
 									/>
 								</div>
-								{viewerTarget && (
-									<div className="app-browser-viewer-pane">
-										<Viewer
-											target={viewerTarget}
-											onClose={() => {
-												setViewerTarget(null);
-											}}
-										/>
-									</div>
-								)}
-							</div>
-						</div>
-					) : viewerTarget ? (
-						<div className="app-browser-view">
-							<div className="app-browser-body app-browser-body--with-viewer">
-								<div className="app-browser-viewer-pane app-browser-viewer-pane--standalone">
-									<Viewer
-										target={viewerTarget}
-										onClose={() => {
-											setViewerTarget(null);
-										}}
-									/>
-								</div>
 							</div>
 						</div>
 					) : (
-						<div className="app-main-empty">
-							<p>
-								Select a bucket from the sidebar to browse objects.
-							</p>
+						<Empty className="app-main-empty">
+							<EmptyHeader><EmptyTitle>No bucket selected</EmptyTitle><EmptyDescription>Select a bucket from the sidebar to browse objects.</EmptyDescription></EmptyHeader>
 							<button
 								type="button"
 								className="tds-btn tds-btn--md tds-btn--secondary"
@@ -761,7 +828,7 @@ export default function App(): JSX.Element {
 							>
 								Open URL
 							</button>
-						</div>
+						</Empty>
 					)}
 				</div>
 
@@ -775,7 +842,11 @@ export default function App(): JSX.Element {
 						void handleCancelTransfer(transferId);
 					}}
 				/>
-			</main>
+			</main>}
+			viewer={viewerTarget ? <Viewer target={viewerTarget} onClose={() => setViewerTarget(null)} /> : null}
+			viewerOpen={viewerTarget !== null}
+			onViewerClose={() => setViewerTarget(null)}
+		/>
 
 			<ConnectionDialog
 				isOpen={isConnectionDialogOpen}
@@ -809,6 +880,7 @@ export default function App(): JSX.Element {
 					setIsRenameOpen(false);
 				}}
 				onSuccess={handleRenameSuccess}
+				onFailure={() => notify.operationFailed("Rename")}
 			/>
 
 			<ConfirmDeleteDialog
@@ -816,10 +888,12 @@ export default function App(): JSX.Element {
 				connectionId={selectedConnectionId ?? ""}
 				bucket={selectedBucket ?? ""}
 				item={selectedItem}
+				items={selectedItems}
 				onClose={() => {
 					setIsDeleteOpen(false);
 				}}
 				onSuccess={handleDeleteSuccess}
+				onFailure={() => notify.operationFailed("Delete")}
 			/>
 
 			<OperationReport
@@ -904,6 +978,6 @@ export default function App(): JSX.Element {
 					</div>
 				</form>
 			</Dialog>
-		</div>
+		</>
 	);
 }

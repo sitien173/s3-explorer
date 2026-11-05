@@ -1,5 +1,6 @@
+import { Button } from "./ui/button";
 import { type JSX } from "react";
-import { Dialog } from "./Dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 export interface OperationReportProps {
 	isOpen: boolean;
@@ -28,13 +29,13 @@ export function OperationReport({
 			onClose={onClose}
 			footer={
 				<div className="app-dialog-footer-actions">
-					<button
+					<Button
 						type="button"
-						className="tds-btn tds-btn--md tds-btn--primary"
+						variant="default"
 						onClick={onClose}
 					>
 						Close
-					</button>
+					</Button>
 				</div>
 			}
 		>

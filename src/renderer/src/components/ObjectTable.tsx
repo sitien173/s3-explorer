@@ -4,9 +4,11 @@ import {
 	useRef,
 	useState,
 	type ChangeEvent,
+	type KeyboardEvent,
 	type JSX,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { initialSelection, keyboardAction, selectionReducer, type SelectionState } from "../selection";
 import type { ObjectsListResponse } from "../../../shared/ipc";
 import { api, IpcErrorWrapper, unwrap } from "../api";
 import {
@@ -20,6 +22,9 @@ import {
 	type S3Item,
 } from "../format";
 import { SsoBanner } from "./SsoBanner";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./ui/context-menu";
+import { Empty, EmptyDescription } from "./ui/empty";
+import { Skeleton } from "./ui/skeleton";
 
 export interface ObjectTableProps {
 	connectionId: string;
@@ -28,7 +33,12 @@ export interface ObjectTableProps {
 	onNavigate: (newPrefix: string) => void;
 	searchResults?: S3Item[] | null;
 	isSearchActive?: boolean;
-	selectedRowKey?: string | null;
+	selectedRowKeys?: string[];
+	activeRowKey?: string | null;
+	onSelectionChange?: (state: SelectionState) => void;
+	onGridAction?: (action: string, row: BrowserRow | null) => void;
+	onOpenRow?: (row: BrowserRow) => void;
+	onShortcut?: (action: string) => void;
 	onSelectObject?: (item: S3Item) => void;
 	onSelectRow?: (row: BrowserRow) => void;
 	refreshTrigger?: number;
@@ -62,7 +72,12 @@ export function ObjectTable({
 	onNavigate,
 	searchResults,
 	isSearchActive = false,
-	selectedRowKey: controlledSelectedRowKey,
+	selectedRowKeys: controlledSelectedRowKeys,
+	activeRowKey: controlledActiveRowKey,
+	onSelectionChange,
+	onGridAction,
+	onOpenRow,
+	onShortcut,
 	onSelectObject,
 	onSelectRow,
 	refreshTrigger,
@@ -78,13 +93,11 @@ export function ObjectTable({
 	const [ssoProfile, setSsoProfile] = useState<string | null>(null);
 
 	const [filterText, setFilterText] = useState<string>("");
-	const [internalSelectedRowKey, setInternalSelectedRowKey] = useState<
-		string | null
-	>(null);
-	const selectedRowKey =
-		controlledSelectedRowKey !== undefined
-			? controlledSelectedRowKey
-			: internalSelectedRowKey;
+	const [localSelection, setLocalSelection] = useState<SelectionState>(initialSelection);
+	const [contextRow, setContextRow] = useState<BrowserRow | null>(null);
+	const [contextOpen, setContextOpen] = useState(false);
+	const selectedKeys = controlledSelectedRowKeys ?? localSelection.selected;
+	const activeRowKey = controlledActiveRowKey !== undefined ? controlledActiveRowKey : localSelection.active;
 
 	const requestIdRef = useRef<number>(0);
 	const currentPrefixRef = useRef<string>(prefix);
@@ -93,6 +106,10 @@ export function ObjectTable({
 	const nextTokenRef = useRef<string | undefined>(undefined);
 
 	nextTokenRef.current = nextToken;
+
+	useEffect(() => {
+		setLocalSelection(initialSelection);
+	}, [connectionId, bucket, prefix]);
 
 	const loadFirstPage = useCallback(async (): Promise<void> => {
 		if (isSearchActive) {
@@ -113,7 +130,7 @@ export function ObjectTable({
 		setObjects([]);
 		setNextToken(undefined);
 		setFilterText("");
-		setInternalSelectedRowKey(null);
+		setLocalSelection(initialSelection);
 		inFlightRef.current = true;
 
 		try {
@@ -279,6 +296,167 @@ export function ObjectTable({
 	});
 
 	const virtualItems = rowVirtualizer.getVirtualItems();
+	const visibleKeys = visibleRows.map((row) => row.kind === "folder" ? row.prefix : row.key);
+	const activeIndex = activeRowKey ? visibleKeys.indexOf(activeRowKey) : -1;
+	useEffect(() => {
+		if (activeIndex >= 0) rowVirtualizer.scrollToIndex(activeIndex, { align: "auto" });
+	}, [activeIndex, rowVirtualizer]);
+	const updateSelection = (next: SelectionState): void => {
+		setLocalSelection(next);
+		onSelectionChange?.(next);
+		for (const key of next.selected) {
+			const row = visibleRows.find((candidate) => (candidate.kind === "folder" ? candidate.prefix : candidate.key) === key);
+			if (row) onSelectRow?.(row);
+		}
+	};
+	useEffect(() => {
+		if (loading) return;
+		const existing = selectedKeys.filter((key) => visibleKeys.includes(key));
+		if (existing.length !== selectedKeys.length) {
+			const active = activeRowKey && existing.includes(activeRowKey) ? activeRowKey : existing[0] ?? null;
+			updateSelection({ selected: existing, active, anchor: localSelection.anchor && existing.includes(localSelection.anchor) ? localSelection.anchor : active });
+		}
+	}, [loading, selectedKeys, activeRowKey, localSelection.anchor, visibleRows]);
+	const activeRow = activeIndex >= 0 ? visibleRows[activeIndex] : null;
+	const hasFolderSelected = selectedKeys.some((k) =>
+		visibleRows.some((r) => r.kind === "folder" && r.prefix === k),
+	);
+	const handleGridKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+		const target = event.target as HTMLElement;
+		if (
+			target !== event.currentTarget &&
+			/^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)
+		) {
+			return;
+		}
+		if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+
+		const action = keyboardAction({
+			key: event.key,
+			shiftKey: event.shiftKey,
+			altKey: event.altKey,
+			ctrlKey: event.ctrlKey,
+			metaKey: event.metaKey,
+			selectionCount: selectedKeys.length,
+		});
+		if (!action) return;
+		event.preventDefault();
+
+		const state = {
+			selected: selectedKeys,
+			active: activeRowKey ?? null,
+			anchor: localSelection.anchor,
+		};
+		const visibleRowCount = Math.max(
+			1,
+			Math.floor((parentRef.current?.clientHeight || 0) / ROW_HEIGHT),
+		);
+		const selectedRow =
+			selectedKeys.length === 1
+				? (visibleRows.find(
+						(candidate) =>
+							(candidate.kind === "folder"
+								? candidate.prefix
+								: candidate.key) === selectedKeys[0],
+					) ?? null)
+				: null;
+		if (["move-up", "move-down", "extend-up", "extend-down"].includes(action)) {
+			updateSelection(
+				selectionReducer(state, {
+					type: "move",
+					delta: action.endsWith("up") ? -1 : 1,
+					extend: action.startsWith("extend"),
+					keys: visibleKeys,
+				}),
+			);
+		} else if (action === "page-up" || action === "page-down") {
+			updateSelection(
+				selectionReducer(state, {
+					type: "move",
+					delta: action === "page-up" ? -1 : 1,
+					page: true,
+					pageSize: visibleRowCount,
+					keys: visibleKeys,
+				}),
+			);
+		} else if (action === "home" || action === "end") {
+			updateSelection(selectionReducer(state, { type: action, keys: visibleKeys }));
+		} else if (action === "toggle" && activeRowKey) {
+			updateSelection(
+				selectionReducer(state, {
+					type: "toggle",
+					key: activeRowKey,
+					keys: visibleKeys,
+				}),
+			);
+		} else if (action === "select-all") {
+			updateSelection(selectionReducer(initialSelection, { type: "all", keys: visibleKeys }));
+		} else if (action === "clear") {
+			updateSelection(initialSelection);
+		} else if (action === "open") {
+			const targetRow =
+				visibleRows.find(
+					(candidate) =>
+						(candidate.kind === "folder"
+							? candidate.prefix
+							: candidate.key) === selectedKeys[0],
+				) ?? activeRow;
+			if (targetRow) {
+				if (onOpenRow) {
+					onOpenRow(targetRow);
+				} else {
+					onGridAction?.("open", targetRow);
+				}
+			}
+		} else if (action === "delete") {
+			if (hasFolderSelected && selectedKeys.length > 1) {
+				return;
+			}
+			onGridAction?.("delete", selectedRow);
+			onShortcut?.("delete");
+		} else if (action === "context-menu") {
+			const targetRow =
+				activeRow ??
+				visibleRows.find(
+					(candidate) =>
+						(candidate.kind === "folder"
+							? candidate.prefix
+							: candidate.key) === selectedKeys[0],
+				) ??
+				visibleRows[0] ??
+				null;
+			setContextRow(targetRow);
+			const targetKey = targetRow
+				? targetRow.kind === "folder"
+					? targetRow.prefix
+					: targetRow.key
+				: null;
+			const rowEl = targetKey
+				? document.getElementById(
+						`object-row-${encodeURIComponent(targetKey)}`,
+					)
+				: parentRef.current;
+			if (rowEl) {
+				const rect = rowEl.getBoundingClientRect();
+				const clientX = rect.left + (rect.width ? rect.width / 2 : 0);
+				const clientY = rect.top + (rect.height ? rect.height / 2 : 0);
+				rowEl.dispatchEvent(
+					new MouseEvent("contextmenu", {
+						bubbles: true,
+						cancelable: true,
+						clientX,
+						clientY,
+					}),
+				);
+			} else {
+				setContextOpen(true);
+			}
+			onGridAction?.(action, targetRow);
+		} else {
+			onGridAction?.(action, selectedRow);
+			onShortcut?.(action);
+		}
+	};
 
 	useEffect(() => {
 		if (virtualItems.length === 0) {
@@ -379,6 +557,7 @@ export function ObjectTable({
 						value={filterText}
 						onChange={(e: ChangeEvent<HTMLInputElement>) => {
 							setFilterText(e.target.value);
+							updateSelection(initialSelection);
 						}}
 						placeholder="Filter loaded rows by name..."
 						aria-label="Filter loaded rows by name"
@@ -397,10 +576,25 @@ export function ObjectTable({
 				</div>
 			</div>
 
+			<ContextMenu open={contextOpen} onOpenChange={setContextOpen}>
+			<ContextMenuTrigger asChild>
 			<div
 				className="tds-data-table-container app-table-scroll-container"
-				role="table"
+				role="grid"
+				tabIndex={0}
+				aria-busy={loading ? "true" : undefined}
+				aria-multiselectable="true"
+				aria-activedescendant={activeRowKey ? `object-row-${encodeURIComponent(activeRowKey)}` : undefined}
 				aria-rowcount={visibleRows.length + 1}
+				onKeyDown={handleGridKeyDown}
+				onContextMenu={(event) => {
+					const element = (event.target as HTMLElement).closest<HTMLElement>("[data-row-key]");
+					const key = element?.dataset.rowKey;
+					const row = visibleRows.find((candidate) => (candidate.kind === "folder" ? candidate.prefix : candidate.key) === key) ?? null;
+					setContextRow(row);
+					if (row) onSelectRow?.(row);
+					if (row && key && !selectedKeys.includes(key)) updateSelection(selectionReducer(initialSelection, { type: "select", key, keys: visibleKeys }));
+				}}
 			>
 				<div
 					className="tds-data-table__header-row app-table-header-grid"
@@ -429,18 +623,20 @@ export function ObjectTable({
 
 				<div ref={parentRef} className="app-table-virtual-viewport">
 					{loading && visibleRows.length === 0 ? (
-						<div className="app-table-loading-state">
-							<div className="tds-spinner tds-spinner--md" />
-							<span>Loading objects...</span>
+						<div
+							className="app-table-loading-state"
+							role="status"
+							aria-live="polite"
+							aria-busy="true"
+							aria-label="Loading objects"
+						>
+							<span className="sr-only">Loading objects...</span>
+							{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="tds-data-table__skeleton" />)}
 						</div>
 					) : visibleRows.length === 0 ? (
-						<div className="app-table-empty-state">
-							{filterText.trim()
-								? "No matching items found."
-								: isSearchActive
-									? "No objects matched your search."
-									: "This folder is empty."}
-						</div>
+						<Empty className="app-table-empty-state" role="status">
+							<EmptyDescription>{filterText.trim() ? "No matching items found." : isSearchActive ? "No objects matched your search." : prefix ? "This folder is empty." : "This bucket is empty."}</EmptyDescription>
+						</Empty>
 					) : (
 						<div
 							style={{
@@ -455,7 +651,7 @@ export function ObjectTable({
 									row.kind === "folder"
 										? row.prefix
 										: row.key;
-								const isSelected = selectedRowKey === rowKey;
+								const isSelected = selectedKeys.includes(rowKey);
 
 								return (
 									<div
@@ -468,21 +664,20 @@ export function ObjectTable({
 											height: `${virtualRow.size}px`,
 											transform: `translateY(${virtualRow.start}px)`,
 										}}
+										id={`object-row-${encodeURIComponent(rowKey)}`}
 										className={`app-table-row-grid ${row.kind === "folder" ? "app-table-row-grid--folder" : "app-table-row-grid--object"} ${isSelected ? "app-table-row-grid--selected" : ""}`}
 										role="row"
-										tabIndex={0}
+										tabIndex={-1}
 										aria-rowindex={virtualRow.index + 2}
 										aria-selected={isSelected}
-										onClick={() => {
+										data-row-key={rowKey}
+										onClick={(event) => {
+											const clickedKey = row.kind === "folder" ? row.prefix : row.key;
+											const nextSelection = event.shiftKey ? selectionReducer({ selected: selectedKeys, active: activeRowKey ?? clickedKey, anchor: localSelection.anchor ?? activeRowKey ?? clickedKey }, { type: "range", key: clickedKey, keys: visibleKeys }) : event.ctrlKey || event.metaKey ? selectionReducer({ selected: selectedKeys, active: activeRowKey ?? clickedKey, anchor: localSelection.anchor ?? clickedKey }, { type: "toggle", key: clickedKey, keys: visibleKeys }) : selectionReducer(initialSelection, { type: "select", key: clickedKey, keys: visibleKeys });
+											updateSelection(nextSelection);
 											if (row.kind === "folder") {
-												if (selectedRowKey === row.prefix) {
-													onNavigate(row.prefix);
-												} else {
-													setInternalSelectedRowKey(row.prefix);
-													onSelectRow?.(row);
-												}
+												onSelectRow?.(row);
 											} else {
-												setInternalSelectedRowKey(row.key);
 												onSelectObject?.({
 													key: row.key,
 													size: row.size,
@@ -493,44 +688,8 @@ export function ObjectTable({
 											}
 										}}
 										onDoubleClick={() => {
-											if (row.kind === "folder") {
-												onNavigate(row.prefix);
-											}
-										}}
-										onKeyDown={(e) => {
-											if (e.target !== e.currentTarget) {
-												return;
-											}
-											if (e.key === "Enter") {
-												e.preventDefault();
-												if (row.kind === "folder") {
-													onNavigate(row.prefix);
-												} else {
-													setInternalSelectedRowKey(row.key);
-													onSelectObject?.({
-														key: row.key,
-														size: row.size,
-														lastModified: row.lastModified,
-														etag: row.etag,
-													});
-													onSelectRow?.(row);
-												}
-											} else if (e.key === " ") {
-												e.preventDefault();
-												if (row.kind === "folder") {
-													setInternalSelectedRowKey(row.prefix);
-													onSelectRow?.(row);
-												} else {
-													setInternalSelectedRowKey(row.key);
-													onSelectObject?.({
-														key: row.key,
-														size: row.size,
-														lastModified: row.lastModified,
-														etag: row.etag,
-													});
-													onSelectRow?.(row);
-												}
-											}
+											if (row.kind === "folder") onNavigate(row.prefix);
+											else onOpenRow?.(row);
 										}}
 									>
 										<div
@@ -589,7 +748,7 @@ export function ObjectTable({
 							})}
 						</div>
 					)}
-				</div>
+			</div>
 
 				{loadingMore && (
 					<div className="app-table-loading-more">
@@ -598,6 +757,53 @@ export function ObjectTable({
 					</div>
 				)}
 			</div>
+				</ContextMenuTrigger>
+				<ContextMenuContent>
+					{selectedKeys.length > 1 ? (
+						hasFolderSelected ? (
+							<ContextMenuItem disabled>
+								Delete (folders cannot be multi-deleted)
+							</ContextMenuItem>
+						) : (
+							<ContextMenuItem
+								onSelect={() => onGridAction?.("delete", null)}
+							>
+								{`Delete ${selectedKeys.length} objects`}
+							</ContextMenuItem>
+						)
+					) : contextRow?.kind === "object" ? (
+						<>
+							<ContextMenuItem onSelect={() => onOpenRow ? onOpenRow(contextRow) : onGridAction?.("open", contextRow)}>
+								Open
+							</ContextMenuItem>
+							<ContextMenuItem onSelect={() => onGridAction?.("system-open", contextRow)}>
+								Open with system app
+							</ContextMenuItem>
+							<ContextMenuItem onSelect={() => onGridAction?.("download", contextRow)}>
+								Download
+							</ContextMenuItem>
+							<ContextMenuItem onSelect={() => onGridAction?.("rename", contextRow)}>
+								Rename or move
+							</ContextMenuItem>
+							<ContextMenuItem onSelect={() => onGridAction?.("delete", contextRow)}>
+								Delete
+							</ContextMenuItem>
+						</>
+					) : contextRow?.kind === "folder" ? (
+						<>
+							<ContextMenuItem onSelect={() => onNavigate(contextRow.prefix)}>
+								Open
+							</ContextMenuItem>
+							<ContextMenuItem onSelect={() => onGridAction?.("rename", contextRow)}>
+								Rename folder
+							</ContextMenuItem>
+							<ContextMenuItem onSelect={() => onGridAction?.("delete", contextRow)}>
+								Delete folder
+							</ContextMenuItem>
+						</>
+					) : null}
+				</ContextMenuContent>
+			</ContextMenu>
 		</div>
 	);
 }

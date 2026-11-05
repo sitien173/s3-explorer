@@ -12,6 +12,8 @@ import { ImageView } from "./viewer/ImageView";
 import { MediaView } from "./viewer/MediaView";
 import { PdfView } from "./viewer/PdfView";
 import { TextView } from "./viewer/TextView";
+import { Button } from "./ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 export interface ViewerTargetS3 {
 	kind: "s3";
@@ -151,7 +153,7 @@ export function Viewer({ target, onClose }: ViewerProps): JSX.Element {
 		: "unsupported";
 
 	return (
-		<aside className="app-viewer" aria-label="Object preview">
+		<aside className="app-viewer" aria-label="Object preview" role="region">
 			<header className="app-viewer-header">
 				<div className="app-viewer-meta">
 					<span className="app-viewer-filename" title={fileName}>
@@ -163,25 +165,9 @@ export function Viewer({ target, onClose }: ViewerProps): JSX.Element {
 						</span>
 					)}
 				</div>
-				<button
-					type="button"
-					className="tds-icon-btn tds-icon-btn--invisible tds-icon-btn--md"
-					aria-label="Close preview"
-					onClick={onClose}
-				>
-					<svg
-						width="12"
-						height="12"
-						viewBox="0 0 12 12"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						aria-hidden="true"
-					>
-						<path d="M1 1l10 10M11 1L1 11" />
-					</svg>
-				</button>
+				<TooltipProvider>
+					<Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" aria-label="Close preview" onClick={onClose}>×</Button></TooltipTrigger><TooltipContent>Close preview</TooltipContent></Tooltip>
+				</TooltipProvider>
 			</header>
 
 			{systemAppError && (

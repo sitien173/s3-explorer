@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { S3Item } from "../format";
 import { api, unwrap } from "../api";
+import { Button } from "./ui/button";
 
 export interface SearchBarProps {
 	connectionId: string;
@@ -199,32 +200,32 @@ export function SearchBar({
 						placeholder={`Search objects in ${bucket}/${prefix}...`}
 					/>
 				</div>
-				<button
+				<Button
 					type="submit"
-					className="tds-btn tds-btn--md tds-btn--secondary"
+					variant="secondary"
 					disabled={running || !query.trim()}
 				>
 					Search
-				</button>
+				</Button>
 				{running && (
-					<button
+					<Button
 						type="button"
-						className="tds-btn tds-btn--md tds-btn--secondary"
+						variant="secondary"
 						onClick={() => {
 							void handleCancelSearch();
 						}}
 					>
 						Cancel
-					</button>
+					</Button>
 				)}
 				{isSearchActive && !running && (
-					<button
+					<Button
 						type="button"
-						className="tds-btn tds-btn--md tds-btn--secondary"
+						variant="secondary"
 						onClick={handleClear}
 					>
 						Clear results
-					</button>
+					</Button>
 				)}
 			</form>
 

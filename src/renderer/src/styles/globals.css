@@ -1,0 +1,55 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./tds/button.css" layer(components);
+@import "./tds/icon-button.css" layer(components);
+@import "./tds/text-input.css" layer(components);
+@import "./tds/select.css" layer(components);
+@import "./tds/checkbox.css" layer(components);
+@import "./tds/field-label.css" layer(components);
+@import "./tds/field-caption.css" layer(components);
+@import "./tds/field-validation.css" layer(components);
+@import "./tds/dialog.css" layer(components);
+@import "./tds/data-table.css" layer(components);
+@import "./tds/breadcrumb.css" layer(components);
+@import "./tds/side-nav.css" layer(components);
+@import "./tds/announcement.css" layer(components);
+@import "./tds/nav-list.css" layer(components);
+@import "./tds/nav-item.css" layer(components);
+@import "./tds/spinner.css" layer(components);
+@import "./tds/progress-indicator.css" layer(components);
+@import "./tds/tag.css" layer(components);
+@import "./tds/tooltip.css" layer(components);
+@import "./tds/caret.css" layer(components);
+@import "./tds/dropdown-panel.css" layer(components);
+@import "./tds/action-list-item.css" layer(components);
+@import "./app.css" layer(components);
+
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --text-*: initial;
+  --font-*: initial;
+}
+@theme inline {
+  --font-sans: var(--font-family);
+  --color-background: var(--surface-neutral-01);
+  --color-card: var(--surface-neutral-01);
+  --color-popover: var(--surface-neutral-01);
+  --color-foreground: var(--text-default);
+  --color-card-foreground: var(--text-default);
+  --color-popover-foreground: var(--text-default);
+  --color-secondary-foreground: var(--text-default);
+  --color-accent-foreground: var(--text-default);
+  --color-primary: var(--interactive-default);
+  --color-primary-foreground: var(--text-inverse);
+  --color-secondary: var(--surface-neutral-02);
+  --color-muted: var(--surface-neutral-02);
+  --color-muted-foreground: var(--text-description);
+  --color-accent: var(--surface-hover);
+  --color-destructive: var(--border-negative);
+  --color-border: var(--border-subtle);
+  --color-input: var(--border-strong);
+  --color-ring: var(--border-focus);
+}

@@ -87,6 +87,9 @@ describe("secure BrowserWindow defaults", () => {
 			/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/,
 		);
 		expect(match?.[1]).toBe(CSP);
+		expect(CSP).toContain("style-src 'self' 'unsafe-inline'");
+		expect(CSP).toContain("script-src 'self'");
+		expect(CSP).not.toContain("script-src 'self' 'unsafe-inline'");
 	});
 
 	it("keeps development CSP limited to Vite requirements", () => {
@@ -125,8 +128,9 @@ describe("secure BrowserWindow defaults", () => {
 
 	it("uses a production-safe default CSP", () => {
 		expect(CSP).toContain("default-src 'self'");
+		expect(CSP).toContain("script-src 'self'");
+		expect(CSP).toContain("style-src 'self' 'unsafe-inline'");
 		expect(CSP).not.toContain("unsafe-eval");
-		expect(CSP).not.toContain("unsafe-inline");
 	});
 });
 

@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import {
 	useEffect,
 	useId,
@@ -7,7 +8,7 @@ import {
 } from "react";
 import { api, unwrap } from "../api";
 import type { BrowserRow } from "../format";
-import { Dialog } from "./Dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 export interface RenameResultReport {
 	completedCount: number;
@@ -21,7 +22,8 @@ export interface RenameDialogProps {
 	bucket: string;
 	item: BrowserRow | null;
 	onClose: () => void;
-	onSuccess: (report?: RenameResultReport) => void;
+	onSuccess: (report?: RenameResultReport, destinationKey?: string) => void;
+	onFailure?: () => void;
 }
 
 function createOpId(): string {
@@ -37,6 +39,7 @@ export function RenameDialog({
 	item,
 	onClose,
 	onSuccess,
+	onFailure,
 }: RenameDialogProps): JSX.Element | null {
 	const targetKeyId = useId();
 	const [targetKey, setTargetKey] = useState<string>("");
@@ -119,12 +122,13 @@ export function RenameDialog({
 						error: data.error?.message,
 					});
 				} else {
-					onSuccess();
+					onSuccess(undefined, trimmed);
 				}
 				onClose();
 			} catch (err: unknown) {
 				const message =
 					err instanceof Error ? err.message : "Rename failed";
+				onFailure?.();
 				setError(message);
 			} finally {
 				unsubscribe();
@@ -139,11 +143,12 @@ export function RenameDialog({
 					toKey: trimmed,
 				});
 				unwrap(res);
-				onSuccess();
+				onSuccess(undefined, trimmed);
 				onClose();
 			} catch (err: unknown) {
 				const message =
 					err instanceof Error ? err.message : "Rename failed";
+				onFailure?.();
 				setError(message);
 			} finally {
 				setSubmitting(false);
@@ -158,22 +163,22 @@ export function RenameDialog({
 			onClose={handleClose}
 			footer={
 				<div className="app-dialog-footer-actions">
-					<button
+					<Button
 						type="button"
-						className="tds-btn tds-btn--md tds-btn--secondary"
+						variant="secondary"
 						onClick={handleClose}
 						disabled={submitting}
 					>
 						Cancel
-					</button>
-					<button
+					</Button>
+					<Button
 						type="submit"
 						form="app-rename-form"
-						className="tds-btn tds-btn--md tds-btn--primary"
+						variant="default"
 						disabled={submitting || !targetKey.trim()}
 					>
 						{submitting ? "Renaming..." : "Rename"}
-					</button>
+					</Button>
 				</div>
 			}
 		>

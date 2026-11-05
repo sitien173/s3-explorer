@@ -1,7 +1,8 @@
-import { useEffect, useState, type JSX } from "react";
+import { Button } from "./ui/button";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import { api, unwrap } from "../api";
 import type { BrowserRow } from "../format";
-import { Dialog } from "./Dialog";
+import { AlertDialog as Dialog } from "@/components/ui/alert-dialog";
 import type { RenameResultReport } from "./RenameDialog";
 
 export interface ConfirmDeleteDialogProps {
@@ -9,8 +10,10 @@ export interface ConfirmDeleteDialogProps {
 	connectionId: string;
 	bucket: string;
 	item: BrowserRow | null;
+	items?: BrowserRow[];
 	onClose: () => void;
 	onSuccess: (report?: RenameResultReport) => void;
+	onFailure?: () => void;
 }
 
 function createOpId(): string {
@@ -24,8 +27,10 @@ export function ConfirmDeleteDialog({
 	connectionId,
 	bucket,
 	item,
+	items,
 	onClose,
 	onSuccess,
+	onFailure,
 }: ConfirmDeleteDialogProps): JSX.Element | null {
 	const [count, setCount] = useState<number | null>(null);
 	const [counting, setCounting] = useState<boolean>(false);
@@ -36,10 +41,16 @@ export function ConfirmDeleteDialog({
 		total: number;
 	} | null>(null);
 
-	const isFolder = item?.kind === "folder";
+	const singleItem = useMemo(() => (item ? [item] : []), [item]);
+	const deleteItems = items && items.length > 0 ? items : singleItem;
+	const isMulti = deleteItems.length > 1;
+	const isMultiObject = isMulti && deleteItems.every((selected) => selected.kind === "object");
+	const hasFolderInMulti = isMulti && deleteItems.some((selected) => selected.kind === "folder");
+	const targetItem = deleteItems.length === 1 ? deleteItems[0] : (isMultiObject ? deleteItems[0] : item);
+	const isFolder = deleteItems.length === 1 && targetItem?.kind === "folder";
 
 	useEffect(() => {
-		if (!isOpen || !item) {
+		if (!isOpen || deleteItems.length === 0) {
 			return;
 		}
 
@@ -47,7 +58,26 @@ export function ConfirmDeleteDialog({
 		setDeleting(false);
 		setProgress(null);
 
-		if (item.kind === "object") {
+		if (hasFolderInMulti) {
+			setError("Folders cannot be multi-deleted.");
+			setCount(null);
+			setCounting(false);
+			return;
+		}
+
+		if (isMultiObject) {
+			setCount(deleteItems.length);
+			setCounting(false);
+			return;
+		}
+
+		if (!targetItem) {
+			setCount(null);
+			setCounting(false);
+			return;
+		}
+
+		if (targetItem.kind === "object") {
 			setCount(1);
 			setCounting(false);
 			return;
@@ -62,7 +92,7 @@ export function ConfirmDeleteDialog({
 			.countPrefix({
 				connectionId,
 				bucket,
-				prefix: item.prefix,
+				prefix: targetItem.prefix,
 			})
 			.then((res) => {
 				if (!active) {
@@ -81,16 +111,17 @@ export function ConfirmDeleteDialog({
 					err instanceof Error
 						? err.message
 						: "Failed to count objects in folder";
+				onFailure?.();
 				setError(message);
 			});
 
 		return () => {
 			active = false;
 		};
-	}, [isOpen, item, connectionId, bucket]);
+	}, [isOpen, deleteItems, targetItem, isMultiObject, hasFolderInMulti, connectionId, bucket]);
 
 	async function handleDelete(): Promise<void> {
-		if (!item || count === null || counting) {
+		if (!targetItem || count === null || counting || hasFolderInMulti) {
 			return;
 		}
 
@@ -105,12 +136,33 @@ export function ConfirmDeleteDialog({
 		});
 
 		try {
-			if (item.kind === "folder") {
+			if (isMultiObject) {
+				const res = await api.ops.delete({
+					opId,
+					connectionId,
+					bucket,
+					keys: deleteItems.map(
+						(selected) =>
+							(selected as Extract<BrowserRow, { kind: "object" }>).key,
+					),
+				});
+				const data = unwrap(res);
+
+				if (data.remaining.length > 0 || data.error) {
+					onSuccess({
+						completedCount: data.completed.length,
+						remainingKeys: data.remaining,
+						error: data.error?.message,
+					});
+				} else {
+					onSuccess();
+				}
+			} else if (targetItem.kind === "folder") {
 				const res = await api.ops.deletePrefix({
 					opId,
 					connectionId,
 					bucket,
-					prefix: item.prefix,
+					prefix: targetItem.prefix,
 				});
 				const data = unwrap(res);
 
@@ -128,7 +180,7 @@ export function ConfirmDeleteDialog({
 					opId,
 					connectionId,
 					bucket,
-					keys: [item.key],
+					keys: [targetItem.key],
 				});
 				const data = unwrap(res);
 
@@ -146,6 +198,7 @@ export function ConfirmDeleteDialog({
 		} catch (err: unknown) {
 			const message =
 				err instanceof Error ? err.message : "Delete failed";
+			onFailure?.();
 			setError(message);
 		} finally {
 			unsubscribe();
@@ -153,7 +206,7 @@ export function ConfirmDeleteDialog({
 		}
 	}
 
-	const confirmDisabled = counting || count === null || deleting;
+	const confirmDisabled = counting || count === null || deleting || hasFolderInMulti;
 
 	function handleClose(): void {
 		if (deleting) {
@@ -165,28 +218,36 @@ export function ConfirmDeleteDialog({
 	return (
 		<Dialog
 			isOpen={isOpen}
-			title={isFolder ? "Delete folder" : "Delete object"}
+			title={
+				isFolder
+					? "Delete folder"
+					: isMultiObject
+						? `Delete ${deleteItems.length} objects`
+						: hasFolderInMulti
+							? "Delete"
+							: "Delete object"
+			}
 			onClose={handleClose}
 			footer={
 				<div className="app-dialog-footer-actions">
-					<button
+					<Button
 						type="button"
-						className="tds-btn tds-btn--md tds-btn--secondary"
+						variant="secondary"
 						onClick={handleClose}
 						disabled={deleting}
 					>
 						Cancel
-					</button>
-					<button
+					</Button>
+					<Button
 						type="button"
-						className="tds-btn tds-btn--md tds-btn--danger"
+						variant="destructive"
 						onClick={() => {
 							void handleDelete();
 						}}
 						disabled={confirmDisabled}
 					>
 						{deleting ? "Deleting..." : "Delete"}
-					</button>
+					</Button>
 				</div>
 			}
 		>
@@ -216,22 +277,24 @@ export function ConfirmDeleteDialog({
 					<div className="app-dialog-counting-state">
 						<div className="tds-spinner tds-spinner--sm" />
 						<span>
-							Counting objects under {item?.kind === "folder" ? item.prefix : ""}...
+							Counting objects under {targetItem?.kind === "folder" ? targetItem.prefix : ""}...
 						</span>
 					</div>
-				) : count !== null && item ? (
+				) : count !== null && targetItem ? (
 					<div className="app-dialog-delete-prompt">
-						{item.kind === "folder" ? (
+						{targetItem.kind === "folder" ? (
 							<p className="app-dialog-delete-text">
 								Delete{" "}
 								<strong>{count.toLocaleString()}</strong>{" "}
 								{count === 1 ? "object" : "objects"} under{" "}
-								<code>{item.prefix}</code>?
+								<code>{targetItem.prefix}</code>?
 							</p>
+						) : isMultiObject ? (
+							<p className="app-dialog-delete-text">Delete {deleteItems.length} objects?</p>
 						) : (
 							<p className="app-dialog-delete-text">
 								Are you sure you want to delete{" "}
-								<code>{item.key}</code>?
+								<code>{targetItem.key}</code>?
 							</p>
 						)}
 						<p className="app-dialog-delete-subtext">

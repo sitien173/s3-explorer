@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import {
 	useEffect,
 	useId,
@@ -13,7 +14,7 @@ import {
 	getUrlFileName,
 	type ConnectionOption,
 } from "../urlChoice";
-import { Dialog } from "./Dialog";
+import { Dialog } from "@/components/ui/dialog";
 import type { ViewerTargetStream } from "./Viewer";
 
 export interface OpenUrlDialogProps {
@@ -130,22 +131,22 @@ export function OpenUrlDialog({
 			onClose={handleClose}
 			footer={
 				<div className="app-dialog-footer-actions">
-					<button
+					<Button
 						type="button"
-						className="tds-btn tds-btn--md tds-btn--secondary"
+						variant="secondary"
 						onClick={handleClose}
 						disabled={submitting}
 					>
 						Cancel
-					</button>
-					<button
+					</Button>
+					<Button
 						type="submit"
 						form="app-open-url-form"
-						className="tds-btn tds-btn--md tds-btn--primary"
+						variant="default"
 						disabled={submitting || !url.trim()}
 					>
 						{submitting ? "Opening..." : "Open"}
-					</button>
+					</Button>
 				</div>
 			}
 		>

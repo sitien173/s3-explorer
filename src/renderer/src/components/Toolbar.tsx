@@ -1,11 +1,20 @@
 import { type JSX } from "react";
 import type { BrowserRow } from "../format";
+import { Button } from "./ui/button";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "./ui/tooltip";
 
 export interface ToolbarProps {
 	connectionId: string;
 	bucket: string;
 	prefix: string;
 	selectedItem: BrowserRow | null;
+	selectedCount?: number;
+	hasFolderSelected?: boolean;
 	onUpload: () => void;
 	onNewFolder: () => void;
 	onDownload: () => void;
@@ -17,6 +26,8 @@ export interface ToolbarProps {
 
 export function Toolbar({
 	selectedItem,
+	selectedCount = selectedItem ? 1 : 0,
+	hasFolderSelected = false,
 	onUpload,
 	onNewFolder,
 	onDownload,
@@ -25,68 +36,44 @@ export function Toolbar({
 	onOpenUrl,
 	onRefresh,
 }: ToolbarProps): JSX.Element {
-	const isObjectSelected = selectedItem?.kind === "object";
-	const isItemSelected = selectedItem !== null;
+	const isObjectSelected = selectedItem?.kind === "object" && selectedCount === 1;
+	const isSingleSelected = selectedCount === 1;
+	const isMultiDeleteDisabled = selectedCount > 1 && hasFolderSelected;
+	const canDelete = selectedCount === 1 || (selectedCount > 1 && !hasFolderSelected);
+	const deleteTooltip = isMultiDeleteDisabled ? "Folders cannot be multi-deleted" : "Delete";
+
+	const actions: ReadonlyArray<readonly [string, () => void, boolean, string]> = [
+		["Upload", onUpload, false, "Upload"],
+		["New folder", onNewFolder, false, "New folder"],
+		["Download", onDownload, !isObjectSelected, "Download"],
+		["Rename or move", onRename, !isSingleSelected, "Rename or move"],
+		["Delete", onDelete, !canDelete, deleteTooltip],
+		["Open URL", onOpenUrl, false, "Open URL"],
+		["Refresh", onRefresh, false, "Refresh"],
+	];
 
 	return (
-		<div className="app-toolbar" role="toolbar" aria-label="Bucket operations">
-			<div className="app-toolbar-group">
-				<button
-					type="button"
-					className="tds-btn tds-btn--sm tds-btn--secondary"
-					onClick={onUpload}
-				>
-					Upload
-				</button>
-				<button
-					type="button"
-					className="tds-btn tds-btn--sm tds-btn--secondary"
-					onClick={onNewFolder}
-				>
-					New folder
-				</button>
-				<button
-					type="button"
-					className="tds-btn tds-btn--sm tds-btn--secondary"
-					onClick={onDownload}
-					disabled={!isObjectSelected}
-				>
-					Download
-				</button>
-				<button
-					type="button"
-					className="tds-btn tds-btn--sm tds-btn--secondary"
-					onClick={onRename}
-					disabled={!isItemSelected}
-				>
-					Rename or move
-				</button>
-				<button
-					type="button"
-					className="tds-btn tds-btn--sm tds-btn--secondary"
-					onClick={onDelete}
-					disabled={!isItemSelected}
-				>
-					Delete
-				</button>
+		<TooltipProvider>
+			<div className="app-toolbar" role="toolbar" aria-label="Bucket operations">
+				<div className="app-toolbar-group">
+					{actions.map(([label, action, disabled, tooltip]) => (
+						<Tooltip key={label}>
+							<TooltipTrigger asChild>
+								<Button
+									type="button"
+									variant="secondary"
+									size="sm"
+									onClick={action}
+									disabled={disabled}
+								>
+									{label}
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent>{tooltip}</TooltipContent>
+						</Tooltip>
+					))}
+				</div>
 			</div>
-
-			<div className="app-toolbar-group">
-				<button
-					type="button"
-					className="tds-btn tds-btn--sm tds-btn--secondary"
-					onClick={onOpenUrl}
-				>
-					Open URL
-				</button>
-				<button
-					type="button"
-					className="tds-btn tds-btn--sm tds-btn--secondary"
-					onClick={onRefresh}
-				>
-					Refresh
-				</button>
-			</div>
-		</div>
+		</TooltipProvider>
 	);
 }

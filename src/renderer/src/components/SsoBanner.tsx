@@ -1,5 +1,6 @@
 import { useState, type JSX } from "react";
 import { api, unwrap } from "../api";
+import { Alert } from "./ui/alert";
 
 export interface SsoBannerProps {
 	profile: string;
@@ -36,7 +37,7 @@ export function SsoBanner({
 	}
 
 	return (
-		<div className="tds-announcement tds-announcement--warning app-sso-banner">
+		<Alert className="tds-announcement--warning app-sso-banner">
 			<div className="tds-announcement__content">
 				<div className="tds-announcement__title">
 					SSO session expired
@@ -68,6 +69,6 @@ export function SsoBanner({
 					{status === "signing_in" ? "Signing in..." : "Sign in"}
 				</button>
 			</div>
-		</div>
+		</Alert>
 	);
 }

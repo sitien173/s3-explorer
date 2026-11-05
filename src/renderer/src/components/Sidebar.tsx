@@ -13,7 +13,9 @@ import {
 } from "../format";
 import { AddBucketDialog } from "./AddBucketDialog";
 import { type ConnectionView } from "./ConnectionDialog";
-import { Dialog } from "./Dialog";
+import { Dialog } from "./ui/dialog";
+import { Empty, EmptyDescription } from "./ui/empty";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./ui/context-menu";
 import { SsoBanner } from "./SsoBanner";
 
 export interface SidebarProps {
@@ -202,7 +204,7 @@ export function Sidebar({
 	}
 
 	return (
-		<aside className="app-sidebar">
+		<aside className="app-sidebar tds-side-nav">
 			<div className="app-sidebar-header">
 				<span className="app-sidebar-title">Connections</span>
 				<button
@@ -226,11 +228,9 @@ export function Sidebar({
 				)}
 
 				{connections.length === 0 ? (
-					<div className="app-sidebar-empty">
-						No connections configured.
-					</div>
+					<Empty className="app-sidebar-empty"><EmptyDescription>No connections configured.</EmptyDescription></Empty>
 				) : (
-					<div className="app-connection-list">
+					<div className="tds-nav-list"><div className="app-connection-list">
 						{connections.map((conn) => {
 							const isSelected = selectedConnectionId === conn.id;
 							return (
@@ -241,7 +241,7 @@ export function Sidebar({
 									<div className="app-connection-header">
 										<button
 											type="button"
-											className="app-connection-name-btn"
+											className="tds-nav-item app-connection-name-btn"
 											onClick={() => {
 												onSelectConnection(
 													isSelected ? null : conn.id,
@@ -335,12 +335,9 @@ export function Sidebar({
 																	selectedBucket ===
 																	b.name;
 																return (
-																	<div
-																		key={
-																			b.name
-																		}
-																		className={`app-bucket-row ${isBucketActive ? "app-bucket-row--active" : ""}`}
-																	>
+																	<ContextMenu key={b.name}>
+																	<ContextMenuTrigger asChild>
+																	<div className={`app-bucket-row ${isBucketActive ? "app-bucket-row--active" : ""}`}>
 																		<button
 																			type="button"
 																			className="app-bucket-name-btn"
@@ -387,7 +384,13 @@ export function Sidebar({
 																			</button>
 																		)}
 																	</div>
-																);
+																	</ContextMenuTrigger>
+																	<ContextMenuContent>
+																		<ContextMenuItem onSelect={() => onSelectBucket(conn.id, b.name)}>Open</ContextMenuItem>
+																		<ContextMenuItem onSelect={() => void (b.pinned ? handleUnpin(b.name) : handlePin(b.name))}>{b.pinned ? "Unpin" : "Pin"}</ContextMenuItem>
+																	</ContextMenuContent>
+																</ContextMenu>
+															);
 															})}
 														</div>
 													) : (
@@ -406,7 +409,7 @@ export function Sidebar({
 								</div>
 							);
 						})}
-					</div>
+					</div></div>
 				)}
 			</div>
 
