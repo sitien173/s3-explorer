@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 const mocks = vi.hoisted(() => ({
   api: {
     connections: { listProfiles: vi.fn(), create: vi.fn(), update: vi.fn(), testConnection: vi.fn() },
-    buckets: { add: vi.fn() },
+    buckets: { add: vi.fn(), create: vi.fn(), delete: vi.fn() },
     ops: { onProgress: vi.fn(() => () => {}), countPrefix: vi.fn(), deletePrefix: vi.fn(), delete: vi.fn(), renamePrefix: vi.fn(), rename: vi.fn() },
     stream: { openUrl: vi.fn() },
   },
@@ -16,6 +16,8 @@ vi.mock("../../src/renderer/src/api", () => ({ api: mocks.api, unwrap: (r: any) 
 
 import { ConnectionDialog } from "../../src/renderer/src/components/ConnectionDialog";
 import { AddBucketDialog } from "../../src/renderer/src/components/AddBucketDialog";
+import { CreateBucketDialog } from "../../src/renderer/src/components/CreateBucketDialog";
+import { DeleteBucketDialog } from "../../src/renderer/src/components/DeleteBucketDialog";
 import { RenameDialog } from "../../src/renderer/src/components/RenameDialog";
 import { ConfirmDeleteDialog } from "../../src/renderer/src/components/ConfirmDeleteDialog";
 import { OpenUrlDialog } from "../../src/renderer/src/components/OpenUrlDialog";
@@ -88,6 +90,147 @@ describe("renderer dialog components", () => {
     await user.tab(); expect(modal.contains(document.activeElement)).toBe(true);
     await user.keyboard("{Escape}"); expect(onClose).toHaveBeenCalled();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open test dialog" })));
+  });
+
+  it("CreateBucketDialog blocks an invalid name without calling the api", async () => {
+    const user = userEvent.setup();
+    render(<CreateBucketDialog open onOpenChange={vi.fn()} connectionId="c1" existingNames={[]} onCreated={vi.fn()} />);
+    await user.type(screen.getByLabelText("Bucket name (required)"), "AB");
+    await user.click(screen.getByRole("button", { name: "Create bucket" }));
+    expect(await screen.findByText(/at least 3|3 characters/i)).toBeTruthy();
+    expect(mocks.api.buckets.create).not.toHaveBeenCalled();
+  });
+
+  it("CreateBucketDialog blocks a name that is already listed", async () => {
+    const user = userEvent.setup();
+    render(<CreateBucketDialog open onOpenChange={vi.fn()} connectionId="c1" existingNames={["taken-bucket"]} onCreated={vi.fn()} />);
+    await user.type(screen.getByLabelText("Bucket name (required)"), "  taken-bucket  ");
+    await user.click(screen.getByRole("button", { name: "Create bucket" }));
+    expect(await screen.findByText("A bucket with this name is already listed")).toBeTruthy();
+    expect(mocks.api.buckets.create).not.toHaveBeenCalled();
+  });
+
+  it("CreateBucketDialog creates with the trimmed name and reports success with the warning", async () => {
+    const user = userEvent.setup();
+    mocks.api.buckets.create.mockResolvedValue(ok({ bucket: "new-bucket", warning: "Pin failed" }));
+    const onCreated = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<CreateBucketDialog open onOpenChange={onOpenChange} connectionId="c1" existingNames={[]} onCreated={onCreated} />);
+    await user.type(screen.getByLabelText("Bucket name (required)"), " new-bucket ");
+    await user.click(screen.getByRole("button", { name: "Create bucket" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("new-bucket", "Pin failed"));
+    expect(mocks.api.buckets.create).toHaveBeenCalledWith({ connectionId: "c1", bucket: "new-bucket" });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("CreateBucketDialog sends one request on a double submit", async () => {
+    const user = userEvent.setup();
+    let resolve!: (value: unknown) => void;
+    mocks.api.buckets.create.mockReturnValue(new Promise((r) => { resolve = r; }));
+    render(<CreateBucketDialog open onOpenChange={vi.fn()} connectionId="c1" existingNames={[]} onCreated={vi.fn()} />);
+    await user.type(screen.getByLabelText("Bucket name (required)"), "new-bucket");
+    await user.dblClick(screen.getByRole("button", { name: "Create bucket" }));
+    expect(mocks.api.buckets.create).toHaveBeenCalledTimes(1);
+    resolve(ok({ bucket: "new-bucket" }));
+  });
+
+  it("CreateBucketDialog shows an api error inline and stays open", async () => {
+    const user = userEvent.setup();
+    mocks.api.buckets.create.mockResolvedValue({ ok: false, error: { code: "BUCKET_EXISTS", message: "Bucket name is taken" } });
+    const onCreated = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<CreateBucketDialog open onOpenChange={onOpenChange} connectionId="c1" existingNames={[]} onCreated={onCreated} />);
+    await user.type(screen.getByLabelText("Bucket name (required)"), "new-bucket");
+    await user.click(screen.getByRole("button", { name: "Create bucket" }));
+    expect(await screen.findByText("Bucket name is taken")).toBeTruthy();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("DeleteBucketDialog enables confirm only on an exact name match", async () => {
+    const user = userEvent.setup();
+    render(<DeleteBucketDialog open onOpenChange={vi.fn()} connectionName="Conn" connectionId="c1" bucket="My-Bucket" onDeleted={vi.fn()} />);
+    expect(screen.getByRole("alertdialog", { name: "Delete bucket" })).toBeTruthy();
+    expect(screen.getAllByText("My-Bucket").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Conn").length).toBeGreaterThan(0);
+    const confirm = screen.getByRole("button", { name: "Delete bucket" });
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+    const input = screen.getByLabelText(/Type the bucket name to confirm/);
+    await user.type(input, "my-bucket");
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+    await user.clear(input);
+    await user.type(input, "My-Bucket");
+    expect(confirm.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("DeleteBucketDialog shows BUCKET_NOT_EMPTY inline and does not report deletion", async () => {
+    const user = userEvent.setup();
+    mocks.api.buckets.delete.mockResolvedValue({ ok: false, error: { code: "BUCKET_NOT_EMPTY", message: "Bucket is not empty" } });
+    const onDeleted = vi.fn();
+    render(<DeleteBucketDialog open onOpenChange={vi.fn()} connectionName="Conn" connectionId="c1" bucket="b1" onDeleted={onDeleted} />);
+    await user.type(screen.getByLabelText(/Type the bucket name to confirm/), "b1");
+    await user.click(screen.getByRole("button", { name: "Delete bucket" }));
+    expect(await screen.findByText("Bucket is not empty")).toBeTruthy();
+    expect(mocks.api.buckets.delete).toHaveBeenCalledWith({ connectionId: "c1", bucket: "b1" });
+    expect(onDeleted).not.toHaveBeenCalled();
+  });
+
+  it("DeleteBucketDialog reports success with the warning", async () => {
+    const user = userEvent.setup();
+    mocks.api.buckets.delete.mockResolvedValue(ok({ bucket: "b1", warning: "Cleanup failed" }));
+    const onDeleted = vi.fn();
+    render(<DeleteBucketDialog open onOpenChange={vi.fn()} connectionName="Conn" connectionId="c1" bucket="b1" onDeleted={onDeleted} />);
+    await user.type(screen.getByLabelText(/Type the bucket name to confirm/), "b1");
+    await user.click(screen.getByRole("button", { name: "Delete bucket" }));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("b1", "Cleanup failed"));
+  });
+
+  it("DeleteBucketDialog keeps its target when props change while open", async () => {
+    const user = userEvent.setup();
+    mocks.api.buckets.delete.mockResolvedValue(ok({ bucket: "b1" }));
+    const onDeleted = vi.fn();
+    const view = render(<DeleteBucketDialog open onOpenChange={vi.fn()} connectionName="Conn" connectionId="c1" bucket="b1" onDeleted={onDeleted} />);
+    view.rerender(<DeleteBucketDialog open onOpenChange={vi.fn()} connectionName="Other" connectionId="c2" bucket="b2" onDeleted={onDeleted} />);
+    await user.type(screen.getByLabelText(/Type the bucket name to confirm/), "b1");
+    await user.click(screen.getByRole("button", { name: "Delete bucket" }));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("b1", undefined));
+    expect(mocks.api.buckets.delete).toHaveBeenCalledWith({ connectionId: "c1", bucket: "b1" });
+  });
+
+  it("CreateBucketDialog ignores dismissal while a request is pending and closes after it resolves", async () => {
+    const user = userEvent.setup();
+    let resolve!: (value: unknown) => void;
+    mocks.api.buckets.create.mockReturnValue(new Promise((r) => { resolve = r; }));
+    const onOpenChange = vi.fn();
+    render(<CreateBucketDialog open onOpenChange={onOpenChange} connectionId="c1" existingNames={[]} onCreated={vi.fn()} />);
+    await user.type(screen.getByLabelText("Bucket name (required)"), "new-bucket");
+    await user.click(screen.getByRole("button", { name: "Create bucket" }));
+    await waitFor(() => expect(mocks.api.buckets.create).toHaveBeenCalledTimes(1));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    resolve(ok({ bucket: "new-bucket" }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(mocks.api.buckets.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("DeleteBucketDialog ignores dismissal and a second confirm while a request is pending", async () => {
+    const user = userEvent.setup();
+    let resolve!: (value: unknown) => void;
+    mocks.api.buckets.delete.mockReturnValue(new Promise((r) => { resolve = r; }));
+    const onOpenChange = vi.fn();
+    const onDeleted = vi.fn();
+    render(<DeleteBucketDialog open onOpenChange={onOpenChange} connectionName="Conn" connectionId="c1" bucket="b1" onDeleted={onDeleted} />);
+    await user.type(screen.getByLabelText(/Type the bucket name to confirm/), "b1");
+    await user.click(screen.getByRole("button", { name: "Delete bucket" }));
+    await waitFor(() => expect(mocks.api.buckets.delete).toHaveBeenCalledTimes(1));
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /Deleting/ }));
+    expect(mocks.api.buckets.delete).toHaveBeenCalledTimes(1);
+    resolve(ok({ bucket: "b1" }));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("b1", undefined));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("RenameDialog preserves the e2e name, target label, action, and modal keyboard behavior", async () => {

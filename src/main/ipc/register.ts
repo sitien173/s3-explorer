@@ -103,7 +103,11 @@ export function register(
 											? "Destination exists"
 											: code === "TOO_LARGE"
 												? "Too large to rename"
-												: "Request failed",
+												: code === "BUCKET_EXISTS"
+													? "Bucket name is taken"
+													: code === "BUCKET_NOT_EMPTY"
+														? "Bucket is not empty"
+														: "Request failed",
 						...(code === "SSO_LOGIN_REQUIRED" && profile ? { profile } : {}),
 					},
 				});
@@ -123,6 +127,8 @@ export function register(
 	registerChannel(channels.bucketsPin, browse[channels.bucketsPin]);
 	registerChannel(channels.bucketsUnpin, browse[channels.bucketsUnpin]);
 	registerChannel(channels.bucketsAdd, browse[channels.bucketsAdd]);
+	registerChannel(channels.bucketsCreate, browse[channels.bucketsCreate]);
+	registerChannel(channels.bucketsDelete, browse[channels.bucketsDelete]);
 	registerChannel(channels.objectsList, browse[channels.objectsList]);
 	registerChannel(channels.searchStart, browse[channels.searchStart]);
 	registerChannel(channels.searchCancel, browse[channels.searchCancel]);

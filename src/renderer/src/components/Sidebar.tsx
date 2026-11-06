@@ -12,11 +12,14 @@ import {
 	type BucketItem,
 } from "../format";
 import { AddBucketDialog } from "./AddBucketDialog";
+import { CreateBucketDialog } from "./CreateBucketDialog";
+import { DeleteBucketDialog } from "./DeleteBucketDialog";
 import { type ConnectionView } from "./ConnectionDialog";
 import { Dialog } from "./ui/dialog";
 import { Empty, EmptyDescription } from "./ui/empty";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./ui/context-menu";
 import { SsoBanner } from "./SsoBanner";
+import { notify } from "../toasts";
 
 export interface SidebarProps {
 	selectedConnectionId: string | null;
@@ -25,6 +28,7 @@ export interface SidebarProps {
 	onSelectBucket: (connectionId: string, bucketName: string) => void;
 	onOpenAddConnection: () => void;
 	onOpenEditConnection: (connection: ConnectionView) => void;
+	onBucketDeleted: (connectionId: string, bucket: string) => void;
 	refreshKey?: number;
 }
 
@@ -35,6 +39,7 @@ export function Sidebar({
 	onSelectBucket,
 	onOpenAddConnection,
 	onOpenEditConnection,
+	onBucketDeleted,
 	refreshKey = 0,
 }: SidebarProps): JSX.Element {
 	const [connections, setConnections] = useState<ConnectionView[]>([]);
@@ -52,6 +57,11 @@ export function Sidebar({
 	const [deleting, setDeleting] = useState<boolean>(false);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [showAddBucket, setShowAddBucket] = useState<boolean>(false);
+	const [showCreateBucket, setShowCreateBucket] = useState<boolean>(false);
+	const [bucketToDelete, setBucketToDelete] = useState<string | null>(null);
+	const newBucketBtnRef = useRef<HTMLButtonElement | null>(null);
+	const deletedRef = useRef<boolean>(false);
+	const bucketListRef = useRef<HTMLDivElement | null>(null);
 
 	const connectionsRef = useRef<ConnectionView[]>(connections);
 	connectionsRef.current = connections;
@@ -176,6 +186,16 @@ export function Sidebar({
 		}
 	}
 
+	function handleBucketChanged(
+		connectionId: string,
+		warning: string | undefined,
+	): void {
+		if (warning) {
+			notify({ type: "warning", message: warning });
+		}
+		void loadBuckets(connectionId);
+	}
+
 	async function confirmDelete(): Promise<void> {
 		if (!connectionToDelete) {
 			return;
@@ -216,7 +236,7 @@ export function Sidebar({
 				</button>
 			</div>
 
-			<div className="app-sidebar-content">
+			<div className="app-sidebar-content" ref={bucketListRef}>
 				{connectionsError && (
 					<div className="tds-announcement tds-announcement--error app-sidebar-banner">
 						<div className="tds-announcement__content">
@@ -281,6 +301,16 @@ export function Sidebar({
 
 									{isSelected && (
 										<div className="app-connection-details">
+											<button
+												type="button"
+												ref={newBucketBtnRef}
+												className="tds-btn tds-btn--sm tds-btn--secondary"
+												onClick={() => {
+													setShowCreateBucket(true);
+												}}
+											>
+												New bucket
+											</button>
 											{ssoProfile && (
 												<SsoBanner
 													profile={ssoProfile}
@@ -341,6 +371,7 @@ export function Sidebar({
 																		<button
 																			type="button"
 																			className="app-bucket-name-btn"
+																			data-bucket={b.name}
 																			onClick={() => {
 																				onSelectBucket(
 																					conn.id,
@@ -388,6 +419,7 @@ export function Sidebar({
 																	<ContextMenuContent>
 																		<ContextMenuItem onSelect={() => onSelectBucket(conn.id, b.name)}>Open</ContextMenuItem>
 																		<ContextMenuItem onSelect={() => void (b.pinned ? handleUnpin(b.name) : handlePin(b.name))}>{b.pinned ? "Unpin" : "Pin"}</ContextMenuItem>
+																		<ContextMenuItem onSelect={() => setBucketToDelete(b.name)}>Delete bucket</ContextMenuItem>
 																	</ContextMenuContent>
 																</ContextMenu>
 															);
@@ -422,6 +454,49 @@ export function Sidebar({
 					}}
 					onAdded={() => {
 						void loadBuckets(selectedConnectionId);
+					}}
+				/>
+			)}
+
+			{selectedConnectionId && (
+				<CreateBucketDialog
+					open={showCreateBucket}
+					onOpenChange={setShowCreateBucket}
+					connectionId={selectedConnectionId}
+					existingNames={buckets.map((b) => b.name)}
+					onCreated={(_bucket, warning) => {
+						handleBucketChanged(selectedConnectionId, warning);
+					}}
+				/>
+			)}
+
+			{selectedConnectionId && bucketToDelete && (
+				<DeleteBucketDialog
+					open
+					onOpenChange={(open) => {
+						if (!open) {
+							const closed = bucketToDelete;
+							setBucketToDelete(null);
+							// Run after the dialog's own focus restore, which targets the unmounted menu item.
+							setTimeout(() => {
+								const trigger = Array.from(
+									bucketListRef.current?.querySelectorAll<HTMLElement>("[data-bucket]") ?? [],
+								).find((el) => el.dataset.bucket === closed);
+								(deletedRef.current ? newBucketBtnRef.current : (trigger ?? newBucketBtnRef.current))?.focus();
+								deletedRef.current = false;
+							}, 0);
+						}
+					}}
+					connectionName={
+						connections.find((c) => c.id === selectedConnectionId)
+							?.name ?? ""
+					}
+					connectionId={selectedConnectionId}
+					bucket={bucketToDelete}
+					onDeleted={(bucket, warning) => {
+						deletedRef.current = true;
+						handleBucketChanged(selectedConnectionId, warning);
+						onBucketDeleted(selectedConnectionId, bucket);
 					}}
 				/>
 			)}

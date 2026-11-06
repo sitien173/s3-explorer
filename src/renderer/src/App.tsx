@@ -317,6 +317,12 @@ export default function App(): JSX.Element {
 		setViewerTarget(null);
 	}
 
+	function handleBucketDeleted(connId: string, bucketName: string): void {
+		if (connId === selectedConnectionId && bucketName === selectedBucket) {
+			handleSelectConnection(connId);
+		}
+	}
+
 	function handleSelectBucket(connId: string, bucketName: string): void {
 		setSelectedConnectionId(connId);
 		setSelectedBucket(bucketName);
@@ -638,6 +644,7 @@ export default function App(): JSX.Element {
 				onSelectBucket={handleSelectBucket}
 				onOpenAddConnection={handleOpenAddConnection}
 				onOpenEditConnection={handleOpenEditConnection}
+				onBucketDeleted={handleBucketDeleted}
 				refreshKey={refreshKey}
 			/>}
 			main={<main className="app-main">

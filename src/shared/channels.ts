@@ -10,6 +10,8 @@ export const channels = {
 	bucketsPin: "buckets:pin",
 	bucketsUnpin: "buckets:unpin",
 	bucketsAdd: "buckets:add",
+	bucketsCreate: "buckets:create",
+	bucketsDelete: "buckets:delete",
 	objectsList: "objects:list",
 	searchStart: "search:start",
 	searchCancel: "search:cancel",

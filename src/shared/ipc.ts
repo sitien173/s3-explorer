@@ -20,6 +20,15 @@ const common = {
 const bucketName = z
 	.string()
 	.regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/);
+export const createBucketName = z
+	.string()
+	.min(3)
+	.max(63)
+	.regex(/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/)
+	.refine((name) => !name.includes(".."))
+	.refine((name) => !/^\d{1,3}(\.\d{1,3}){3}$/.test(name))
+	.refine((name) => !/^(xn--|sthree-|amzn-s3-demo-)/.test(name))
+	.refine((name) => !/(-s3alias|--ol-s3|\.mrap|--x-s3|--table-s3|-an)$/.test(name));
 const prefix = z.string().max(1024).default("");
 const token = z.string().max(4096).optional();
 const jobId = z.string().regex(/^[A-Za-z0-9_-]{8,64}$/);
@@ -83,6 +92,14 @@ export const schemas = {
 		bucket: bucketName,
 	}),
 	[channels.bucketsAdd]: z.object({
+		connectionId: z.string().min(1),
+		bucket: bucketName,
+	}),
+	[channels.bucketsCreate]: z.object({
+		connectionId: z.string().min(1),
+		bucket: createBucketName,
+	}),
+	[channels.bucketsDelete]: z.object({
 		connectionId: z.string().min(1),
 		bucket: bucketName,
 	}),
@@ -212,6 +229,8 @@ export const errorSchema = z
 			"ACCESS_DENIED",
 			"CONFLICT",
 			"TOO_LARGE",
+			"BUCKET_EXISTS",
+			"BUCKET_NOT_EMPTY",
 		]),
 		message: z.string(),
 		profile: z.string().optional(),
@@ -225,6 +244,10 @@ const s3Object = z
 		lastModified: z.string().optional(),
 		etag: z.string().optional(),
 	})
+	.strict();
+
+const bucketMutationResult = z
+	.object({ bucket: z.string(), warning: z.string().optional() })
 	.strict();
 
 export const responseSchemas = {
@@ -254,6 +277,8 @@ export const responseSchemas = {
 	[channels.bucketsPin]: connection,
 	[channels.bucketsUnpin]: connection,
 	[channels.bucketsAdd]: connection,
+	[channels.bucketsCreate]: bucketMutationResult,
+	[channels.bucketsDelete]: bucketMutationResult,
 	[channels.objectsList]: z
 		.object({
 			folders: z.array(z.string()),
@@ -414,6 +439,12 @@ export type BucketsUnpinRequest = z.infer<
 export type BucketsAddRequest = z.infer<
 	(typeof schemas)[typeof channels.bucketsAdd]
 >;
+export type BucketsCreateRequest = z.infer<
+	(typeof schemas)[typeof channels.bucketsCreate]
+>;
+export type BucketsDeleteRequest = z.infer<
+	(typeof schemas)[typeof channels.bucketsDelete]
+>;
 export type ObjectsListRequest = z.infer<
 	(typeof schemas)[typeof channels.objectsList]
 >;
@@ -496,6 +527,12 @@ export type BucketsUnpinResponse = z.infer<
 export type BucketsAddResponse = z.infer<
 	(typeof responseSchemas)[typeof channels.bucketsAdd]
 >;
+export type BucketsCreateResponse = z.infer<
+	(typeof responseSchemas)[typeof channels.bucketsCreate]
+>;
+export type BucketsDeleteResponse = z.infer<
+	(typeof responseSchemas)[typeof channels.bucketsDelete]
+>;
 export type ObjectsListResponse = z.infer<
 	(typeof responseSchemas)[typeof channels.objectsList]
 >;
@@ -570,6 +607,8 @@ export type RequestByChannel = {
 	[channels.bucketsPin]: BucketsPinRequest;
 	[channels.bucketsUnpin]: BucketsUnpinRequest;
 	[channels.bucketsAdd]: BucketsAddRequest;
+	[channels.bucketsCreate]: BucketsCreateRequest;
+	[channels.bucketsDelete]: BucketsDeleteRequest;
 	[channels.objectsList]: ObjectsListRequest;
 	[channels.searchStart]: SearchStartRequest;
 	[channels.searchCancel]: SearchCancelRequest;
@@ -599,6 +638,8 @@ export type ResponseByChannel = {
 	[channels.bucketsPin]: BucketsPinResponse;
 	[channels.bucketsUnpin]: BucketsUnpinResponse;
 	[channels.bucketsAdd]: BucketsAddResponse;
+	[channels.bucketsCreate]: BucketsCreateResponse;
+	[channels.bucketsDelete]: BucketsDeleteResponse;
 	[channels.objectsList]: ObjectsListResponse;
 	[channels.searchStart]: SearchStartResponse;
 	[channels.searchCancel]: SearchCancelResponse;
@@ -649,6 +690,12 @@ export type Api = {
 			input: BucketsUnpinRequest,
 		) => Promise<Result<BucketsUnpinResponse>>;
 		add: (input: BucketsAddRequest) => Promise<Result<BucketsAddResponse>>;
+		create: (
+			input: BucketsCreateRequest,
+		) => Promise<Result<BucketsCreateResponse>>;
+		delete: (
+			input: BucketsDeleteRequest,
+		) => Promise<Result<BucketsDeleteResponse>>;
 	};
 	objects: {
 		list: (input: ObjectsListRequest) => Promise<Result<ObjectsListResponse>>;

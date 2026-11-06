@@ -58,7 +58,7 @@ Context menus open on right-click or via `ContextMenu` / `Shift + F10`:
 - Object items: "Open", "Open with system app", "Download", "Rename or move", and "Delete".
 - Folder items: "Open", "Rename folder", and "Delete folder".
 - Multi-selection: "Delete N objects" for multiple objects; disabled "Delete (folders cannot be multi-deleted)" if any folders are included.
-- Sidebar bucket items: "Open" and "Pin" / "Unpin".
+- Sidebar bucket items: "Open", "Pin" / "Unpin", and "Delete bucket". A "New bucket" button in the selected connection creates a bucket.
 
 ## Security
 

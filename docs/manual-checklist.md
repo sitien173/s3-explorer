@@ -29,3 +29,6 @@ AWS account. Use test resources where possible.
 - [ ] Right-click a single folder in the grid; verify the context menu contains "Open", "Rename folder", and "Delete folder".
 - [ ] Right-click a multi-selection of objects; verify the context menu contains "Delete N objects". If any folders are included, verify the menu shows disabled "Delete (folders cannot be multi-deleted)".
 - [ ] Right-click a bucket in the sidebar; verify the context menu contains "Open" and "Pin" (or "Unpin").
+- [ ] Create a bucket in a region other than us-east-1 with "New bucket"; verify it appears in the sidebar without a manual refresh and is created in the connection's region.
+- [ ] Create a bucket in us-east-1 whose name you already own; verify the result is the expected one for an owned bucket and the dialog shows a clear message if it is rejected.
+- [ ] Delete a non-empty bucket from the sidebar context menu; verify the dialog shows "Bucket is not empty" and the bucket stays in the list.

@@ -18,6 +18,8 @@ const buckets: Api["buckets"] = {
 	pin: (input) => ipcRenderer.invoke(channels.bucketsPin, input),
 	unpin: (input) => ipcRenderer.invoke(channels.bucketsUnpin, input),
 	add: (input) => ipcRenderer.invoke(channels.bucketsAdd, input),
+	create: (input) => ipcRenderer.invoke(channels.bucketsCreate, input),
+	delete: (input) => ipcRenderer.invoke(channels.bucketsDelete, input),
 };
 
 const objects: Api["objects"] = {

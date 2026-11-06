@@ -10,7 +10,7 @@ import {
 } from "../../shared/ipc";
 import { channels, events } from "../../shared/channels";
 import { mapSsoError } from "../sso";
-import { listBuckets } from "../s3/buckets";
+import { createBucket, deleteBucket, listBuckets } from "../s3/buckets";
 import { listObjects } from "../s3/list";
 import { runSearch, MAX_SEARCH_MATCHES } from "../s3/search";
 
@@ -26,6 +26,8 @@ const errorCodes = [
 	"ACCESS_DENIED",
 	"CONFLICT",
 	"TOO_LARGE",
+	"BUCKET_EXISTS",
+	"BUCKET_NOT_EMPTY",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -33,6 +35,20 @@ export type ErrorCode = (typeof errorCodes)[number];
 export function toErrorCode(code: unknown): ErrorCode | undefined {
 	if (typeof code !== "string") return undefined;
 	return errorCodes.find((candidate) => candidate === code);
+}
+
+function bucketListWarning(verb: "created" | "deleted") {
+	return `Bucket ${verb}, but the saved bucket list could not be updated`;
+}
+
+function throwBucketMutationError(
+	error: unknown,
+	connection: { kind?: string; profile?: string },
+): never {
+	if (mapS3Error(error, connection).code === "REQUEST_FAILED") {
+		throw codedError("REQUEST_FAILED", "Request failed");
+	}
+	throwMappedError(error, connection);
 }
 
 function codedError(code: string, message: string) {
@@ -60,6 +76,15 @@ export function mapS3Error(
 			code: "ACCESS_DENIED",
 			message: "Access denied",
 		};
+	}
+	if (name === "BucketAlreadyExists" || name === "BucketAlreadyOwnedByYou") {
+		return { code: "BUCKET_EXISTS", message: "Bucket name is taken" };
+	}
+	if (name === "BucketNotEmpty") {
+		return { code: "BUCKET_NOT_EMPTY", message: "Bucket is not empty" };
+	}
+	if (name === "InvalidBucketName") {
+		return { code: "INVALID_REQUEST", message: "Invalid bucket name" };
 	}
 	if (name === "NoSuchBucket" || name === "NoSuchKey" || name === "NotFound") {
 		return {
@@ -123,6 +148,8 @@ export type BrowseHandlers = {
 		| typeof channels.bucketsPin
 		| typeof channels.bucketsUnpin
 		| typeof channels.bucketsAdd
+		| typeof channels.bucketsCreate
+		| typeof channels.bucketsDelete
 		| typeof channels.objectsList
 		| typeof channels.searchStart
 		| typeof channels.searchCancel]: (
@@ -185,6 +212,50 @@ export function browseHandlers(
 				extraBuckets,
 			});
 			return updated!;
+		},
+		[channels.bucketsCreate]: async (input: RequestByChannel[typeof channels.bucketsCreate]) => {
+			const connection = await deps.store.get(input.connectionId);
+			if (!connection) throw codedError("NOT_FOUND", "Connection not found");
+			const client = await deps.clients.get(connection);
+			try {
+				const region = connection.region ?? (await client.config.region());
+				await createBucket(client, input.bucket, region);
+			} catch (error) {
+				throwBucketMutationError(error, connection);
+			}
+			try {
+				const latest = await deps.store.get(input.connectionId);
+				if (latest && !latest.extraBuckets.includes(input.bucket)) {
+					await deps.store.update(input.connectionId, {
+						extraBuckets: [...latest.extraBuckets, input.bucket],
+					});
+				}
+			} catch {
+				return { bucket: input.bucket, warning: bucketListWarning("created") };
+			}
+			return { bucket: input.bucket };
+		},
+		[channels.bucketsDelete]: async (input: RequestByChannel[typeof channels.bucketsDelete]) => {
+			const connection = await deps.store.get(input.connectionId);
+			if (!connection) throw codedError("NOT_FOUND", "Connection not found");
+			const client = await deps.clients.get(connection);
+			try {
+				await deleteBucket(client, input.bucket);
+			} catch (error) {
+				throwBucketMutationError(error, connection);
+			}
+			try {
+				const latest = await deps.store.get(input.connectionId);
+				if (latest) {
+					await deps.store.update(input.connectionId, {
+						pinnedBuckets: latest.pinnedBuckets.filter((b) => b !== input.bucket),
+						extraBuckets: latest.extraBuckets.filter((b) => b !== input.bucket),
+					});
+				}
+			} catch {
+				return { bucket: input.bucket, warning: bucketListWarning("deleted") };
+			}
+			return { bucket: input.bucket };
 		},
 		[channels.objectsList]: async (input: RequestByChannel[typeof channels.objectsList]) => {
 			const connection = await deps.store.get(input.connectionId);

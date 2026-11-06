@@ -1,4 +1,10 @@
-import { ListBucketsCommand, type S3Client } from "@aws-sdk/client-s3";
+import {
+	type BucketLocationConstraint,
+	CreateBucketCommand,
+	DeleteBucketCommand,
+	ListBucketsCommand,
+	type S3Client,
+} from "@aws-sdk/client-s3";
 import type { BucketsListResponse } from "../../shared/ipc";
 
 export async function listBuckets(
@@ -50,4 +56,26 @@ export async function listBuckets(
 	});
 
 	return { buckets, listDenied };
+}
+
+export async function createBucket(
+	client: Pick<S3Client, "send">,
+	bucket: string,
+	region?: string,
+): Promise<void> {
+	await client.send(
+		new CreateBucketCommand({
+			Bucket: bucket,
+			...(region && region !== "us-east-1"
+				? { CreateBucketConfiguration: { LocationConstraint: region as BucketLocationConstraint } }
+				: {}),
+		}),
+	);
+}
+
+export async function deleteBucket(
+	client: Pick<S3Client, "send">,
+	bucket: string,
+): Promise<void> {
+	await client.send(new DeleteBucketCommand({ Bucket: bucket }));
 }

@@ -1,12 +1,17 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+	CreateBucketCommand,
+	DeleteBucketCommand,
+} from "@aws-sdk/client-s3";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectionStore } from "../../src/main/connections/store";
 import { SecretVault } from "../../src/main/connections/secrets";
 import { register, type SenderLike } from "../../src/main/ipc/register";
+import { createBucket, deleteBucket } from "../../src/main/s3/buckets";
 import { browseHandlers, SearchJobRegistry, mapS3Error } from "../../src/main/ipc/browse";
-import { searchDonePayloadSchema } from "../../src/shared/ipc";
+import { createBucketName, searchDonePayloadSchema } from "../../src/shared/ipc";
 import { channels } from "../../src/shared/channels";
 import { assertNoSecrets } from "./secret-scan";
 
@@ -1064,5 +1069,320 @@ describe("browse IPC - search job registry", () => {
 		expect(runs).toBe(1);
 		expect(jobRegistry.size).toBe(0);
 		expect(sender.listeners.get("destroyed")?.length ?? 0).toBe(0);
+	});
+});
+
+describe("createBucketName", () => {
+	it.each([
+		"abc",
+		"my-bucket",
+		"my.bucket.name",
+		"a1b2c3",
+		"a".repeat(63),
+		"1.2.3.x",
+		"xn-ok-name",
+	])("accepts %s", (name) => {
+		expect(createBucketName.safeParse(name).success).toBe(true);
+	});
+
+	it.each([
+		["too short", "ab"],
+		["too long", "a".repeat(64)],
+		["uppercase", "My-Bucket"],
+		["underscore", "My_Bucket"],
+		["space", "my bucket"],
+		["leading hyphen", "-abc"],
+		["trailing hyphen", "abc-"],
+		["leading dot", ".abc"],
+		["trailing dot", "abc."],
+		["double dot", "a..b"],
+		["ipv4", "192.168.5.4"],
+		["xn-- prefix", "xn--abc"],
+		["sthree- prefix", "sthree-abc"],
+		["amzn-s3-demo- prefix", "amzn-s3-demo-abc"],
+		["-s3alias suffix", "abc-s3alias"],
+		["--ol-s3 suffix", "abc--ol-s3"],
+		[".mrap suffix", "abc.mrap"],
+		["--x-s3 suffix", "abc--x-s3"],
+		["--table-s3 suffix", "abc--table-s3"],
+		["-an suffix", "abc-an"],
+	])("rejects %s", (_label, name) => {
+		expect(createBucketName.safeParse(name).success).toBe(false);
+	});
+});
+
+describe("createBucket and deleteBucket S3 functions", () => {
+	function fakeClient() {
+		const send = vi.fn(async (_command: unknown) => ({}));
+		return { send };
+	}
+
+	it.each([
+		["us-east-1", "us-east-1"],
+		["empty", ""],
+		["undefined", undefined],
+	])("omits CreateBucketConfiguration for %s region", async (_label, region) => {
+		const client = fakeClient();
+		await createBucket(client, "my-bucket", region);
+		expect(client.send).toHaveBeenCalledTimes(1);
+		const command = client.send.mock.calls[0][0] as CreateBucketCommand;
+		expect(command).toBeInstanceOf(CreateBucketCommand);
+		expect(command.input).toEqual({ Bucket: "my-bucket" });
+	});
+
+	it("sends LocationConstraint for eu-west-1", async () => {
+		const client = fakeClient();
+		await createBucket(client, "my-bucket", "eu-west-1");
+		expect(client.send).toHaveBeenCalledTimes(1);
+		const command = client.send.mock.calls[0][0] as CreateBucketCommand;
+		expect(command).toBeInstanceOf(CreateBucketCommand);
+		expect(command.input).toEqual({
+			Bucket: "my-bucket",
+			CreateBucketConfiguration: { LocationConstraint: "eu-west-1" },
+		});
+	});
+
+	it("deleteBucket sends only DeleteBucketCommand", async () => {
+		const client = fakeClient();
+		await deleteBucket(client, "my-bucket");
+		expect(client.send).toHaveBeenCalledTimes(1);
+		const command = client.send.mock.calls[0][0] as DeleteBucketCommand;
+		expect(command).toBeInstanceOf(DeleteBucketCommand);
+		expect(command.input).toEqual({ Bucket: "my-bucket" });
+		const names = client.send.mock.calls.map(
+			(call) => (call[0] as { constructor: { name: string } }).constructor.name,
+		);
+		expect(names).not.toContain("DeleteObjectsCommand");
+		expect(names).not.toContain("ListObjectsV2Command");
+		expect(names).not.toContain("ListObjectVersionsCommand");
+	});
+});
+
+describe("browse IPC - bucket create and delete", () => {
+	async function setup(options: { region?: string; kind?: "manual" | "profile" } = {}) {
+		const dir = await mkdtemp(join(tmpdir(), "browse-bucket-crud-"));
+		const vault = new SecretVault(dir, createFakeCipher() as any);
+		const store = new ConnectionStore(dir, vault);
+		const handlers = new Map<string, (event: any, input: any) => Promise<any>>();
+		const commands: any[] = [];
+		let sendImpl: (command: any) => Promise<any> = async () => ({});
+		const client = {
+			send: (command: any) => {
+				commands.push(command);
+				return sendImpl(command);
+			},
+			config: { region: async () => "ap-south-1" },
+		};
+		const clients: any = { get: vi.fn(async () => client), invalidate: vi.fn() };
+		register(
+			{ handle: (channel: string, listener: any) => handlers.set(channel, listener) },
+			{ store, clients },
+		);
+		const conn =
+			options.kind === "profile"
+				? await store.create({ kind: "profile", name: "p", profile: "dev" } as any)
+				: await store.create({
+						kind: "manual",
+						name: "m",
+						region: options.region ?? "us-east-1",
+						accessKeyId: "KEYID123",
+						secretAccessKey: "SECRET123",
+					});
+		const call = (channel: string, input: unknown) =>
+			handlers.get(channel)!({ sender: createFakeSender() }, input);
+		return {
+			store,
+			conn,
+			commands,
+			clients,
+			call,
+			setSend: (fn: (command: any) => Promise<any>) => {
+				sendImpl = fn;
+			},
+		};
+	}
+	const s3Error = (name: string, message = "raw sdk text AKIAABCDEFGHIJKLMNOP") =>
+		Object.assign(new Error(message), { name });
+
+	it("create sends CreateBucketCommand and adds the name to extraBuckets once", async () => {
+		const t = await setup({ region: "eu-west-1" });
+		const first = await t.call(channels.bucketsCreate, {
+			connectionId: t.conn.id,
+			bucket: "new-bucket",
+		});
+		expect(first).toEqual({ ok: true, data: { bucket: "new-bucket" } });
+		expect(t.commands).toHaveLength(1);
+		expect(t.commands[0]).toBeInstanceOf(CreateBucketCommand);
+		expect(t.commands[0].input).toEqual({
+			Bucket: "new-bucket",
+			CreateBucketConfiguration: { LocationConstraint: "eu-west-1" },
+		});
+		await t.call(channels.bucketsCreate, { connectionId: t.conn.id, bucket: "new-bucket" });
+		expect((await t.store.get(t.conn.id))!.extraBuckets).toEqual(["new-bucket"]);
+	});
+
+	it("create resolves the region from the client for a profile connection without region", async () => {
+		const t = await setup({ kind: "profile" });
+		await t.call(channels.bucketsCreate, { connectionId: t.conn.id, bucket: "new-bucket" });
+		expect(t.commands[0].input).toEqual({
+			Bucket: "new-bucket",
+			CreateBucketConfiguration: { LocationConstraint: "ap-south-1" },
+		});
+	});
+
+	it("create with an invalid name returns INVALID_REQUEST without calling the client", async () => {
+		const t = await setup();
+		const result = await t.call(channels.bucketsCreate, {
+			connectionId: t.conn.id,
+			bucket: "My_Bucket",
+		});
+		expect(result.ok).toBe(false);
+		expect(result.error.code).toBe("INVALID_REQUEST");
+		expect(t.clients.get).not.toHaveBeenCalled();
+		expect(t.commands).toHaveLength(0);
+	});
+
+	it.each([channels.bucketsCreate, channels.bucketsDelete])(
+		"%s returns NOT_FOUND for an unknown connection",
+		async (channel) => {
+			const t = await setup();
+			const result = await t.call(channel, { connectionId: "missing", bucket: "some-bucket" });
+			expect(result.ok).toBe(false);
+			expect(result.error.code).toBe("NOT_FOUND");
+		},
+	);
+
+	it("delete sends only DeleteBucketCommand and removes the name from pins and extras", async () => {
+		const t = await setup();
+		await t.store.update(t.conn.id, {
+			pinnedBuckets: ["gone", "keep"],
+			extraBuckets: ["gone", "other"],
+		});
+		const result = await t.call(channels.bucketsDelete, {
+			connectionId: t.conn.id,
+			bucket: "gone",
+		});
+		expect(result).toEqual({ ok: true, data: { bucket: "gone" } });
+		expect(t.commands).toHaveLength(1);
+		expect(t.commands[0]).toBeInstanceOf(DeleteBucketCommand);
+		const saved = (await t.store.get(t.conn.id))!;
+		expect(saved.pinnedBuckets).toEqual(["keep"]);
+		expect(saved.extraBuckets).toEqual(["other"]);
+	});
+
+	it("delete re-reads the connection after the S3 call", async () => {
+		const t = await setup();
+		await t.store.update(t.conn.id, { pinnedBuckets: ["gone"], extraBuckets: [] });
+		t.setSend(async () => {
+			await t.store.update(t.conn.id, { pinnedBuckets: ["gone", "pinned-meanwhile"] });
+			return {};
+		});
+		await t.call(channels.bucketsDelete, { connectionId: t.conn.id, bucket: "gone" });
+		expect((await t.store.get(t.conn.id))!.pinnedBuckets).toEqual(["pinned-meanwhile"]);
+	});
+
+	it.each([
+		["create", channels.bucketsCreate, "created"],
+		["delete", channels.bucketsDelete, "deleted"],
+	])("%s returns success with a warning when the store update fails", async (_label, channel, verb) => {
+		const t = await setup();
+		vi.spyOn(t.store, "update").mockRejectedValue(new Error("disk full"));
+		const result = await t.call(channel, { connectionId: t.conn.id, bucket: "some-bucket" });
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				bucket: "some-bucket",
+				warning: `Bucket ${verb}, but the saved bucket list could not be updated`,
+			},
+		});
+	});
+
+	it("delete returns a warning when the store read after delete fails", async () => {
+		const t = await setup();
+		const realGet = t.store.get.bind(t.store);
+		let reads = 0;
+		vi.spyOn(t.store, "get").mockImplementation(async (id: string) => {
+			reads += 1;
+			if (reads > 1) throw new Error("read failed");
+			return realGet(id);
+		});
+		const result = await t.call(channels.bucketsDelete, {
+			connectionId: t.conn.id,
+			bucket: "some-bucket",
+		});
+		expect(result.ok).toBe(true);
+		expect(result.data.warning).toBe(
+			"Bucket deleted, but the saved bucket list could not be updated",
+		);
+	});
+
+	it.each([
+		["BucketAlreadyExists", channels.bucketsCreate, "BUCKET_EXISTS", "Bucket name is taken"],
+		["BucketAlreadyOwnedByYou", channels.bucketsCreate, "BUCKET_EXISTS", "Bucket name is taken"],
+		["BucketNotEmpty", channels.bucketsDelete, "BUCKET_NOT_EMPTY", "Bucket is not empty"],
+		["InvalidBucketName", channels.bucketsCreate, "INVALID_REQUEST", "Invalid bucket name"],
+		["AccessDenied", channels.bucketsCreate, "ACCESS_DENIED", "Access denied"],
+		["AccessDenied", channels.bucketsDelete, "ACCESS_DENIED", "Access denied"],
+	])("maps %s on %s to fixed envelope %s", async (name, channel, code, message) => {
+		const t = await setup();
+		t.setSend(async () => {
+			throw s3Error(name);
+		});
+		const result = await t.call(channel, { connectionId: t.conn.id, bucket: "some-bucket" });
+		expect(result).toEqual({ ok: false, error: { code, message } });
+		assertNoSecrets(result);
+	});
+
+	it("does not change the store when S3 fails", async () => {
+		const t = await setup();
+		await t.store.update(t.conn.id, { pinnedBuckets: ["some-bucket"], extraBuckets: [] });
+		t.setSend(async () => {
+			throw s3Error("BucketNotEmpty");
+		});
+		await t.call(channels.bucketsDelete, { connectionId: t.conn.id, bucket: "some-bucket" });
+		expect((await t.store.get(t.conn.id))!.pinnedBuckets).toEqual(["some-bucket"]);
+	});
+
+	it("mapS3Error maps the new bucket error names", () => {
+		expect(mapS3Error(s3Error("BucketAlreadyExists")).code).toBe("BUCKET_EXISTS");
+		expect(mapS3Error(s3Error("BucketAlreadyOwnedByYou")).code).toBe("BUCKET_EXISTS");
+		expect(mapS3Error(s3Error("BucketNotEmpty")).code).toBe("BUCKET_NOT_EMPTY");
+		expect(mapS3Error(s3Error("InvalidBucketName"))).toEqual({
+			code: "INVALID_REQUEST",
+			message: "Invalid bucket name",
+		});
+	});
+	it.each([channels.bucketsCreate, channels.bucketsDelete])(
+		"%s hides raw SDK text for unrecognized errors",
+		async (channel) => {
+			const t = await setup();
+			t.setSend(async () => {
+				throw s3Error("InternalError", "secret-endpoint.internal token=abc123");
+			});
+			const result = await t.call(channel, { connectionId: t.conn.id, bucket: "some-bucket" });
+			expect(result).toEqual({
+				ok: false,
+				error: { code: "REQUEST_FAILED", message: "Request failed" },
+			});
+			expect(JSON.stringify(result)).not.toContain("secret-endpoint");
+			expect(JSON.stringify(result)).not.toContain("abc123");
+		},
+	);
+
+	it("create merges the name into the freshly read extraBuckets", async () => {
+		const t = await setup();
+		t.setSend(async () => {
+			await t.store.update(t.conn.id, { extraBuckets: ["concurrent"] });
+			return {};
+		});
+		const result = await t.call(channels.bucketsCreate, {
+			connectionId: t.conn.id,
+			bucket: "new-bucket",
+		});
+		expect(result).toEqual({ ok: true, data: { bucket: "new-bucket" } });
+		expect((await t.store.get(t.conn.id))!.extraBuckets).toEqual([
+			"concurrent",
+			"new-bucket",
+		]);
 	});
 });

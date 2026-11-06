@@ -11,13 +11,18 @@ import { TransfersDrawer } from "../../src/renderer/src/components/TransfersDraw
 import { RenameDialog } from "../../src/renderer/src/components/RenameDialog";
 import { ConfirmDeleteDialog } from "../../src/renderer/src/components/ConfirmDeleteDialog";
 
-const mocks = vi.hoisted(() => ({ api: { connections: { list: vi.fn() }, buckets: { list: vi.fn(), pin: vi.fn(), unpin: vi.fn() }, ops: { rename: vi.fn(), onProgress: vi.fn(() => () => {}), countPrefix: vi.fn(), delete: vi.fn(), deletePrefix: vi.fn() } } }));
+const mocks = vi.hoisted(() => ({ api: { connections: { list: vi.fn() }, buckets: { list: vi.fn(), pin: vi.fn(), unpin: vi.fn(), create: vi.fn(), delete: vi.fn() }, ops: { rename: vi.fn(), onProgress: vi.fn(() => () => {}), countPrefix: vi.fn(), delete: vi.fn(), deletePrefix: vi.fn() } } }));
 vi.mock("../../src/renderer/src/api", () => ({ api: mocks.api, unwrap: (result: any) => result.data }));
+const toastMocks = vi.hoisted(() => ({ warning: vi.fn() }));
+vi.mock("sonner", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sonner")>();
+  return { ...actual, toast: Object.assign((...args: unknown[]) => (actual.toast as any)(...args), actual.toast, { warning: toastMocks.warning }) };
+});
 import { Sidebar } from "../../src/renderer/src/components/Sidebar";
 
-const sidebarProps = { selectedConnectionId: null, selectedBucket: null, onSelectConnection: vi.fn(), onSelectBucket: vi.fn(), onOpenAddConnection: vi.fn(), onOpenEditConnection: vi.fn() };
+const sidebarProps = { selectedConnectionId: null, selectedBucket: null, onSelectConnection: vi.fn(), onSelectBucket: vi.fn(), onOpenAddConnection: vi.fn(), onOpenEditConnection: vi.fn(), onBucketDeleted: vi.fn() };
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("renderer shell", () => {
   it("keeps sidebar size stable while restoring and opening the viewer", async () => {
@@ -145,6 +150,137 @@ describe("renderer shell", () => {
     fireEvent.contextMenu(bucket);
     expect(await screen.findByRole("menuitem", { name: "Open" })).toBeTruthy();
     expect(await screen.findByRole("menuitem", { name: "Unpin" })).toBeTruthy();
+  });
+
+  const manualConnection = { id: "conn-1", name: "Local connection", kind: "manual", region: "us-east-1", endpoint: null, forcePathStyle: false, profile: null, accessKeyId: "AKIA", secretAccessKey: "secret", sessionToken: null };
+
+  it("shows New bucket for an empty list and for a denied listing", async () => {
+    mocks.api.connections.list.mockResolvedValue({ ok: true, data: [manualConnection] });
+    mocks.api.buckets.list.mockResolvedValueOnce({ ok: true, data: { buckets: [], listDenied: false } });
+    const view = render(<Sidebar {...sidebarProps} selectedConnectionId="conn-1" />);
+    expect(await screen.findByRole("button", { name: "New bucket" })).toBeTruthy();
+    view.unmount();
+    mocks.api.buckets.list.mockResolvedValueOnce({ ok: true, data: { buckets: [], listDenied: true } });
+    render(<Sidebar {...sidebarProps} selectedConnectionId="conn-1" />);
+    expect(await screen.findByRole("button", { name: "New bucket" })).toBeTruthy();
+  });
+
+  it("creates a bucket, refreshes the list without a manual refresh, and shows the warning toast", async () => {
+    const user = userEvent.setup();
+    mocks.api.connections.list.mockResolvedValue({ ok: true, data: [manualConnection] });
+    mocks.api.buckets.list
+      .mockResolvedValueOnce({ ok: true, data: { buckets: [], listDenied: false } })
+      .mockResolvedValue({ ok: true, data: { buckets: [{ name: "fresh-bucket", pinned: false }], listDenied: false } });
+    mocks.api.buckets.create.mockResolvedValue({ ok: true, data: { bucket: "fresh-bucket", warning: "Bucket created but could not be pinned" } });
+    render(<Sidebar {...sidebarProps} selectedConnectionId="conn-1" />);
+    await user.click(await screen.findByRole("button", { name: "New bucket" }));
+    await user.type(screen.getByLabelText("Bucket name (required)"), "fresh-bucket");
+    await user.click(screen.getByRole("button", { name: "Create bucket" }));
+    expect(await screen.findByRole("button", { name: "fresh-bucket" })).toBeTruthy();
+    expect(mocks.api.buckets.create).toHaveBeenCalledWith({ connectionId: "conn-1", bucket: "fresh-bucket" });
+    expect(toastMocks.warning).toHaveBeenCalledWith("Bucket created but could not be pinned", expect.anything());
+  });
+
+  it("deletes a bucket from the context menu, refreshes, and calls onBucketDeleted", async () => {
+    const user = userEvent.setup();
+    const onBucketDeleted = vi.fn();
+    mocks.api.connections.list.mockResolvedValue({ ok: true, data: [manualConnection] });
+    mocks.api.buckets.list
+      .mockResolvedValueOnce({ ok: true, data: { buckets: [{ name: "bucket-one", pinned: false }], listDenied: false } })
+      .mockResolvedValue({ ok: true, data: { buckets: [], listDenied: false } });
+    mocks.api.buckets.delete.mockResolvedValue({ ok: true, data: { bucket: "bucket-one", warning: "Pin cleanup failed" } });
+    render(<Sidebar {...sidebarProps} onBucketDeleted={onBucketDeleted} selectedConnectionId="conn-1" />);
+    fireEvent.contextMenu(await screen.findByRole("button", { name: "bucket-one" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete bucket" }));
+    await user.type(await screen.findByLabelText(/Type the bucket name to confirm/), "bucket-one");
+    await user.click(screen.getByRole("button", { name: "Delete bucket" }));
+    await waitFor(() => expect(onBucketDeleted).toHaveBeenCalledWith("conn-1", "bucket-one"));
+    expect(mocks.api.buckets.delete).toHaveBeenCalledWith({ connectionId: "conn-1", bucket: "bucket-one" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "bucket-one" })).toBeNull());
+    expect(toastMocks.warning).toHaveBeenCalledWith("Pin cleanup failed", expect.anything());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "New bucket" })));
+  });
+
+  it("keeps the bucket listed and shows Bucket is not empty when delete fails", async () => {
+    const user = userEvent.setup();
+    const onBucketDeleted = vi.fn();
+    mocks.api.connections.list.mockResolvedValue({ ok: true, data: [manualConnection] });
+    mocks.api.buckets.list.mockResolvedValue({ ok: true, data: { buckets: [{ name: "bucket-one", pinned: false }], listDenied: false } });
+    mocks.api.buckets.delete.mockResolvedValue({ ok: false, error: { code: "BUCKET_NOT_EMPTY", message: "Bucket is not empty" } });
+    render(<Sidebar {...sidebarProps} onBucketDeleted={onBucketDeleted} selectedConnectionId="conn-1" />);
+    fireEvent.contextMenu(await screen.findByRole("button", { name: "bucket-one" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete bucket" }));
+    await user.type(await screen.findByLabelText(/Type the bucket name to confirm/), "bucket-one");
+    await user.click(screen.getByRole("button", { name: "Delete bucket" }));
+    expect(await screen.findByText("Bucket is not empty")).toBeTruthy();
+    expect(onBucketDeleted).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "bucket-one", hidden: true })).toBeTruthy();
+  });
+
+  it("restores focus to the bucket trigger after cancelling Delete bucket from the context menu", async () => {
+    const user = userEvent.setup();
+    mocks.api.connections.list.mockResolvedValue({ ok: true, data: [manualConnection] });
+    mocks.api.buckets.list.mockResolvedValue({ ok: true, data: { buckets: [{ name: "bucket-one", pinned: false }], listDenied: false } });
+    render(<Sidebar {...sidebarProps} selectedConnectionId="conn-1" />);
+    const bucketButton = await screen.findByRole("button", { name: "bucket-one" });
+    const row = bucketButton.closest(".app-bucket-row") as HTMLElement;
+    bucketButton.focus();
+    fireEvent.contextMenu(bucketButton);
+    const item = await screen.findByRole("menuitem", { name: "Delete bucket" });
+    item.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("alertdialog", { name: "Delete bucket" });
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
+  });
+
+  describe("App bucket deletion state", () => {
+    async function renderApp() {
+      vi.resetModules();
+      vi.doMock("../../src/renderer/src/components/Sidebar", () => ({
+        Sidebar: ({ selectedConnectionId, onSelectBucket, onBucketDeleted }: any) => <div>
+          <span data-testid="selected-connection">{selectedConnectionId ?? "none"}</span>
+          <button onClick={() => onSelectBucket("c1", "b1")}>pick b1</button>
+          <button onClick={() => onBucketDeleted("c1", "b1")}>delete b1</button>
+          <button onClick={() => onBucketDeleted("c1", "other")}>delete other bucket</button>
+          <button onClick={() => onBucketDeleted("c2", "b1")}>delete other connection</button>
+        </div>,
+      }));
+      vi.doMock("../../src/renderer/src/components/ObjectTable", () => ({ ObjectTable: ({ bucket }: any) => <div data-testid="table">{bucket}</div> }));
+      vi.doMock("../../src/renderer/src/components/SearchBar", () => ({ SearchBar: () => null }));
+      vi.doMock("../../src/renderer/src/components/Toolbar", () => ({ Toolbar: () => null }));
+      Object.assign(mocks.api, { transfers: { onProgress: vi.fn(() => () => {}), onDone: vi.fn(() => () => {}) } });
+      mocks.api.connections.list.mockResolvedValue({ ok: true, data: [] });
+      const { default: App } = await import("../../src/renderer/src/App");
+      return render(<App />);
+    }
+    afterEach(() => {
+      vi.doUnmock("../../src/renderer/src/components/Sidebar");
+      vi.doUnmock("../../src/renderer/src/components/ObjectTable");
+      vi.doUnmock("../../src/renderer/src/components/SearchBar");
+      vi.doUnmock("../../src/renderer/src/components/Toolbar");
+      vi.resetModules();
+    });
+
+    it("returns to the no-bucket state and keeps the connection when the open bucket is deleted", async () => {
+      const user = userEvent.setup();
+      await renderApp();
+      await user.click(screen.getByRole("button", { name: "pick b1" }));
+      expect(screen.getByTestId("table").textContent).toBe("b1");
+      await user.click(screen.getByRole("button", { name: "delete b1" }));
+      expect(screen.getByText("No bucket selected")).toBeTruthy();
+      expect(screen.getByTestId("selected-connection").textContent).toBe("c1");
+    });
+
+    it("leaves the selection unchanged when a different bucket or connection is deleted", async () => {
+      const user = userEvent.setup();
+      await renderApp();
+      await user.click(screen.getByRole("button", { name: "pick b1" }));
+      await user.click(screen.getByRole("button", { name: "delete other bucket" }));
+      await user.click(screen.getByRole("button", { name: "delete other connection" }));
+      expect(screen.getByTestId("table").textContent).toBe("b1");
+    });
   });
 
   it("omits the viewer panel when closed and removes it after closing", async () => {

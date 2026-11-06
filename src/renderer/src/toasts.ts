@@ -6,7 +6,7 @@ export interface ToastAction {
 }
 
 export interface ToastDescriptor {
-	type: "success" | "error" | "info";
+	type: "success" | "error" | "info" | "warning";
 	message: string;
 	description?: string;
 	action?: ToastAction;
@@ -100,7 +100,7 @@ export function buildOperationFailedToast(
 ): ToastDescriptor {
 	const operations: Record<string, string> = {
 		Upload: "Upload", Download: "Download", Delete: "Delete", Rename: "Rename",
-		"Create folder": "Create folder", "Open with system app": "Open with system app", "Cancel transfer": "Cancel transfer",
+		"Create folder": "Create folder", "Create bucket": "Create bucket", "Delete bucket": "Delete bucket", "Open with system app": "Open with system app", "Cancel transfer": "Cancel transfer",
 	};
 	const safeOperation = operations[operation] ?? "Operation";
 	return {
@@ -158,6 +158,8 @@ export function notify(descriptor: ToastDescriptor): string | number {
 			return toast.error(descriptor.message, options);
 		case "info":
 			return toast.info(descriptor.message, options);
+		case "warning":
+			return toast.warning(descriptor.message, options);
 		default:
 			return toast(descriptor.message, options);
 	}
