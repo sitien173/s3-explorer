@@ -151,10 +151,7 @@ describe("RustFS bucket-wide search integration", () => {
 				if (!cancelIssued) {
 					cancelIssued = true;
 					// Issue cancel immediately upon receiving the first batch
-					void harness.handlers.get(channels.searchCancel)!(
-						{ sender },
-						{ jobId },
-					);
+					void harness.handlers.get(channels.searchCancel)!({ sender }, { jobId });
 				} else {
 					batchesAfterCancel++;
 				}
@@ -194,10 +191,7 @@ describe("RustFS bucket-wide search integration", () => {
 
 		// 3. fewer matches than the total (total was 1,400)
 		const batches = sender.sent.filter((s) => s.channel === events.searchBatch);
-		const matchesCount = batches.reduce(
-			(acc: number, b: any) => acc + b.payload.matches.length,
-			0,
-		);
+		const matchesCount = batches.reduce((acc: number, b: any) => acc + b.payload.matches.length, 0);
 		expect(matchesCount).toBeGreaterThan(0);
 		expect(matchesCount).toBeLessThan(1400);
 	});

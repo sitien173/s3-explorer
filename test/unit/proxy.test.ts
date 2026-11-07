@@ -11,16 +11,12 @@ import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HandleTarget } from "../../src/main/stream/handles";
 import { HandleRegistry } from "../../src/main/stream/handles";
-import {
-	createStreamProxy,
-	type StreamProxy,
-} from "../../src/main/stream/proxy";
+import { createStreamProxy, type StreamProxy } from "../../src/main/stream/proxy";
 
 const commonHeaders = {
 	"access-control-allow-origin": "null",
 	vary: "Origin",
-	"access-control-expose-headers":
-		"Content-Length, Content-Range, Accept-Ranges, Content-Type",
+	"access-control-expose-headers": "Content-Length, Content-Range, Accept-Ranges, Content-Type",
 	"x-content-type-options": "nosniff",
 	"cache-control": "no-store",
 };
@@ -87,9 +83,7 @@ async function makeHarness(options: HarnessOptions = {}): Promise<Harness> {
 	};
 	const store = {
 		get: vi.fn(async (id: string) =>
-			options.connectionExists === false || id !== connection.id
-				? undefined
-				: connection,
+			options.connectionExists === false || id !== connection.id ? undefined : connection,
 		),
 	};
 	const send = vi.fn(
@@ -133,9 +127,7 @@ async function makeHarness(options: HarnessOptions = {}): Promise<Harness> {
 }
 
 async function startUpstream(
-	handler: (request: IncomingMessage, response: ServerResponse) =>
-		| void
-		| Promise<void>,
+	handler: (request: IncomingMessage, response: ServerResponse) => void | Promise<void>,
 ): Promise<{ origin: string; server: Server }> {
 	const server = createServer((request, response) => {
 		void handler(request, response);
@@ -161,9 +153,7 @@ async function startGzippedUpstream(): Promise<{
 	const uncompressed = "uncompressed text payload that is always gzipped";
 	const compressed = gzipSync(Buffer.from(uncompressed));
 	const upstream = await startUpstream((request, response) => {
-		receivedAcceptEncoding.push(
-			request.headers["accept-encoding"] ?? "",
-		);
+		receivedAcceptEncoding.push(request.headers["accept-encoding"] ?? "");
 		const range = request.headers.range;
 		response.statusCode = range ? 206 : 200;
 		response.setHeader("Content-Type", "text/plain");
@@ -171,10 +161,7 @@ async function startGzippedUpstream(): Promise<{
 		response.setHeader("Content-Length", String(compressed.length));
 		if (range) {
 			const end = /^bytes=0-(\d+)$/.exec(range)?.[1] ?? "0";
-			response.setHeader(
-				"Content-Range",
-				`bytes 0-${end}/${compressed.length}`,
-			);
+			response.setHeader("Content-Range", `bytes 0-${end}/${compressed.length}`);
 		}
 		response.end(compressed);
 	});
@@ -271,13 +258,11 @@ describe("stream proxy routing and S3 responses", () => {
 				url: `${harness.origin}/wrong/${handle}?t=${token}`,
 				method: "GET",
 			},
-			...(["POST", "PUT", "DELETE", "OPTIONS"] as const).map(
-				(method) => ({
-					name: method,
-					url: harness.url,
-					method,
-				}),
-			),
+			...(["POST", "PUT", "DELETE", "OPTIONS"] as const).map((method) => ({
+				name: method,
+				url: harness.url,
+				method,
+			})),
 		];
 		const bodies: string[] = [];
 		for (const item of cases) {
@@ -316,10 +301,10 @@ describe("stream proxy routing and S3 responses", () => {
 					? { ContentLength: 10 }
 					: {
 							Body: Readable.from([Buffer.from("bcd")]),
-						ContentType: "video/mp4",
-						ContentLength: 3,
-						ContentRange: "bytes 1-3/10",
-					},
+							ContentType: "video/mp4",
+							ContentLength: 3,
+							ContentRange: "bytes 1-3/10",
+						},
 		});
 		const response = await fetch(harness.url, {
 			headers: { Range: "Bytes=001-003" },
@@ -360,9 +345,7 @@ describe("stream proxy routing and S3 responses", () => {
 				call.name === "HeadObjectCommand"
 					? { ContentType: "video/mp4" }
 					: {
-							Body: Readable.from([
-								Buffer.from("chunked body content"),
-							]),
+							Body: Readable.from([Buffer.from("chunked body content")]),
 							ContentType: "video/mp4",
 						},
 		});
@@ -403,14 +386,9 @@ describe("stream proxy routing and S3 responses", () => {
 		});
 		expect(response.status).toBe(416);
 		assertCommonHeaders(response);
-		expect(response.headers.get("content-range")).toBe(
-			headSucceeds ? "bytes */12" : null,
-		);
+		expect(response.headers.get("content-range")).toBe(headSucceeds ? "bytes */12" : null);
 		expect(await response.text()).toBe("Range not satisfiable");
-		expect(harness.calls.map((call) => call.name)).toEqual([
-			"GetObjectCommand",
-			"HeadObjectCommand",
-		]);
+		expect(harness.calls.map((call) => call.name)).toEqual(["GetObjectCommand", "HeadObjectCommand"]);
 	});
 
 	it.each([
@@ -430,9 +408,7 @@ describe("stream proxy routing and S3 responses", () => {
 	])("maps S3 $name to a fixed response", async (testCase) => {
 		const error = Object.assign(new Error(testCase.message ?? "upstream detail"), {
 			...(testCase.errorName ? { name: testCase.errorName } : {}),
-			...(testCase.metadata
-				? { $metadata: { httpStatusCode: testCase.metadata } }
-				: {}),
+			...(testCase.metadata ? { $metadata: { httpStatusCode: testCase.metadata } } : {}),
 		});
 		const harness = await makeHarness({
 			script: () => {
@@ -494,9 +470,7 @@ describe("stream proxy cancellation and streaming", () => {
 			});
 			response.once("error", reject);
 		});
-		await waitFor(
-			() => Boolean(harness.calls[0]?.signal?.aborted && body?.destroyed),
-		);
+		await waitFor(() => Boolean(harness.calls[0]?.signal?.aborted && body?.destroyed));
 		expect(harness.calls[0]?.signal?.aborted).toBe(true);
 		expect(body?.destroyed).toBe(true);
 	}, 10_000);
@@ -766,9 +740,7 @@ describe("stream proxy pass-through", () => {
 
 	it("rejects a fourth redirect", async () => {
 		const upstream = await startUpstream((_request, response) => {
-			const index = Number(
-				new URL(_request.url ?? "/", "http://upstream").pathname.slice(5),
-			);
+			const index = Number(new URL(_request.url ?? "/", "http://upstream").pathname.slice(5));
 			if (index === 4) {
 				response.statusCode = 200;
 				response.setHeader("Content-Length", "4");
@@ -788,23 +760,20 @@ describe("stream proxy pass-through", () => {
 		expect(await response.text()).toBe("Upstream error");
 	});
 
-	it.each(["ftp://x/y", "file:///etc/passwd"])(
-		"rejects redirect target %s",
-		async (location) => {
-			const upstream = await startUpstream((_request, response) => {
-				response.statusCode = 302;
-				response.setHeader("Location", location);
-				response.end("discarded");
-			});
-			const harness = await makeHarness({
-				target: { kind: "passthrough", url: `${upstream.origin}/start` },
-			});
-			const response = await fetch(harness.url);
-			expect(response.status).toBe(502);
-			assertCommonHeaders(response);
-			expect(await response.text()).toBe("Upstream error");
-		},
-	);
+	it.each(["ftp://x/y", "file:///etc/passwd"])("rejects redirect target %s", async (location) => {
+		const upstream = await startUpstream((_request, response) => {
+			response.statusCode = 302;
+			response.setHeader("Location", location);
+			response.end("discarded");
+		});
+		const harness = await makeHarness({
+			target: { kind: "passthrough", url: `${upstream.origin}/start` },
+		});
+		const response = await fetch(harness.url);
+		expect(response.status).toBe(502);
+		assertCommonHeaders(response);
+		expect(await response.text()).toBe("Upstream error");
+	});
 
 	it("returns 502 for a redirect without Location", async () => {
 		const upstream = await startUpstream((_request, response) => {
@@ -988,9 +957,7 @@ describe("stream proxy describe and lifecycle", () => {
 		const harness = await makeHarness({
 			script: () => ({ ContentType: "video/mp4" }),
 		});
-		await expect(
-			harness.proxy.describe(harness.handle),
-		).rejects.toMatchObject({
+		await expect(harness.proxy.describe(harness.handle)).rejects.toMatchObject({
 			code: "REQUEST_FAILED",
 			message: "Request failed",
 		});
@@ -1146,9 +1113,7 @@ describe("stream proxy describe and lifecycle", () => {
 			key: "clip.mp4",
 		});
 		const url = proxy.urlFor(handle);
-		expect(url).toMatch(
-			/^http:\/\/127\.0\.0\.1:\d+\/o\/[0-9a-f]{32}\?t=[0-9a-f]{64}$/,
-		);
+		expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/o\/[0-9a-f]{32}\?t=[0-9a-f]{64}$/);
 		const address = new URL(first.origin);
 		const refused = await new Promise<NodeJS.ErrnoException>((resolve, reject) => {
 			const socket = createConnection({
@@ -1180,23 +1145,19 @@ describe("stream proxy describe and lifecycle", () => {
 		const stopPromise = proxy.stop();
 		const [{ origin }] = await Promise.all([startPromise, stopPromise]);
 		const url = new URL(origin);
-		const refused = await new Promise<NodeJS.ErrnoException>(
-			(resolve, reject) => {
-				const socket = createConnection({
-					host: "127.0.0.1",
-					port: Number(url.port),
-				});
-				socket.once("connect", () => {
-					socket.destroy();
-					reject(
-						new Error("Server still listening after stop in start"),
-					);
-				});
-				socket.once("error", (error: NodeJS.ErrnoException) => {
-					resolve(error);
-				});
-			},
-		);
+		const refused = await new Promise<NodeJS.ErrnoException>((resolve, reject) => {
+			const socket = createConnection({
+				host: "127.0.0.1",
+				port: Number(url.port),
+			});
+			socket.once("connect", () => {
+				socket.destroy();
+				reject(new Error("Server still listening after stop in start"));
+			});
+			socket.once("error", (error: NodeJS.ErrnoException) => {
+				resolve(error);
+			});
+		});
 		expect(refused.code).toBe("ECONNREFUSED");
 	});
 
@@ -1217,9 +1178,7 @@ describe("stream proxy describe and lifecycle", () => {
 			const response = await fetch(harness.url);
 			expect(response.headers.get("x-content-type-options")).toBe("nosniff");
 			if (expectCsp) {
-				expect(response.headers.get("content-security-policy")).toBe(
-					"sandbox; default-src 'none'",
-				);
+				expect(response.headers.get("content-security-policy")).toBe("sandbox; default-src 'none'");
 			} else {
 				expect(response.headers.get("content-security-policy")).toBeNull();
 			}
@@ -1243,9 +1202,7 @@ describe("stream proxy describe and lifecycle", () => {
 			const response = await fetch(harness.url);
 			expect(response.headers.get("x-content-type-options")).toBe("nosniff");
 			if (expectCsp) {
-				expect(response.headers.get("content-security-policy")).toBe(
-					"sandbox; default-src 'none'",
-				);
+				expect(response.headers.get("content-security-policy")).toBe("sandbox; default-src 'none'");
 			} else {
 				expect(response.headers.get("content-security-policy")).toBeNull();
 			}

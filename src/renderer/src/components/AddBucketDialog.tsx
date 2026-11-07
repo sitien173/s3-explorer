@@ -1,13 +1,12 @@
 import { Button } from "./ui/button";
-import {
-	useEffect,
-	useId,
-	useState,
-	type ChangeEvent,
-	type JSX,
-} from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useId, type JSX } from "react";
+import { useForm } from "react-hook-form";
 import { api, unwrap } from "../api";
+import { addBucketFormSchema } from "../forms";
 import { Dialog } from "@/components/ui/dialog";
+import { FieldError } from "./ui/field";
+import { Input } from "./ui/input";
 
 export interface AddBucketDialogProps {
 	isOpen: boolean;
@@ -16,73 +15,46 @@ export interface AddBucketDialogProps {
 	onAdded: (bucketName: string) => void;
 }
 
-const BUCKET_NAME_REGEX = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/;
-
-export function AddBucketDialog({
-	isOpen,
-	connectionId,
-	onClose,
-	onAdded,
-}: AddBucketDialogProps): JSX.Element | null {
+export function AddBucketDialog({ isOpen, connectionId, onClose, onAdded }: AddBucketDialogProps): JSX.Element | null {
 	const bucketInputId = useId();
-	const [bucketName, setBucketName] = useState<string>("");
-	const [error, setError] = useState<string | null>(null);
-	const [saving, setSaving] = useState<boolean>(false);
+	const {
+		register,
+		handleSubmit,
+		reset,
+		setError,
+		formState: { errors, isSubmitting: saving },
+	} = useForm<{ bucket: string }, unknown, { bucket: string }>({
+		resolver: zodResolver(addBucketFormSchema),
+		defaultValues: { bucket: "" },
+	});
 
 	useEffect(() => {
 		if (!isOpen) {
-			setBucketName("");
-			setError(null);
-			setSaving(false);
+			reset({ bucket: "" });
 		}
-	}, [isOpen]);
+	}, [isOpen, reset]);
 
 	if (!isOpen) {
 		return null;
 	}
 
-	async function handleSubmit(): Promise<void> {
-		const trimmed = bucketName.trim();
-		if (!trimmed) {
-			setError("Bucket name is required.");
-			return;
-		}
-		if (!BUCKET_NAME_REGEX.test(trimmed)) {
-			setError(
-				"Invalid bucket name. Must start with alphanumeric and contain only letters, numbers, dots, hyphens, and underscores (max 255 chars).",
-			);
-			return;
-		}
-
-		setSaving(true);
-		setError(null);
+	async function onValid({ bucket }: { bucket: string }): Promise<void> {
 		try {
 			const res = await api.buckets.add({
 				connectionId,
-				bucket: trimmed,
+				bucket,
 			});
 			unwrap(res);
-			onAdded(trimmed);
+			onAdded(bucket);
 			onClose();
 		} catch (err: unknown) {
-			if (err instanceof Error) {
-				setError(err.message);
-			} else {
-				setError("Failed to add bucket.");
-			}
-		} finally {
-			setSaving(false);
+			setError("bucket", { message: err instanceof Error ? err.message : "Failed to add bucket." });
 		}
 	}
 
 	const footer = (
 		<>
-			<Button
-				type="button"
-				variant="secondary"
-				onClick={onClose}
-				disabled={saving}
-			>
+			<Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
 				Cancel
 			</Button>
 			<Button
@@ -90,7 +62,7 @@ export function AddBucketDialog({
 				variant="default"
 				disabled={saving}
 				onClick={() => {
-					void handleSubmit();
+					void handleSubmit(onValid)();
 				}}
 			>
 				{saving ? "Adding..." : "Add bucket"}
@@ -99,38 +71,22 @@ export function AddBucketDialog({
 	);
 
 	return (
-		<Dialog
-			isOpen={isOpen}
-			title="Add bucket by name"
-			onClose={onClose}
-			footer={footer}
-		>
-			<div
-				className={`tds-text-input app-dialog-field ${error ? "tds-text-input--error" : ""}`}
-			>
-				<label htmlFor={bucketInputId} className="tds-field-label">
+		<Dialog isOpen={isOpen} title="Add bucket by name" onClose={onClose} footer={footer}>
+			<div className="flex w-full min-w-0 flex-col gap-1">
+				<label htmlFor={bucketInputId} className="text-xs font-medium text-foreground">
 					Bucket name (required)
 				</label>
-				<input
+				<Input
 					id={bucketInputId}
 					type="text"
-					className="tds-text-input__field"
-					value={bucketName}
-					onChange={(e: ChangeEvent<HTMLInputElement>) => {
-						setBucketName(e.target.value);
-						if (error) {
-							setError(null);
-						}
-					}}
+					className={errors.bucket ? "border-destructive" : undefined}
+					{...register("bucket")}
 					placeholder="my-bucket-name"
 				/>
-				<span className="tds-field-caption">
-					Specify bucket directly when listing is restricted by IAM
-					policy
+				<span className="text-xs text-foreground-secondary">
+					Specify bucket directly when listing is restricted by IAM policy
 				</span>
-				{error && (
-					<span className="tds-field-validation">{error}</span>
-				)}
+				<FieldError error={errors.bucket} />
 			</div>
 		</Dialog>
 	);

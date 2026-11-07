@@ -1,8 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-	HeadObjectCommand,
-	ListBucketsCommand,
-} from "@aws-sdk/client-s3";
+import { HeadObjectCommand, ListBucketsCommand } from "@aws-sdk/client-s3";
 import {
 	createTestBucket,
 	emptyAndDeleteBucket,
@@ -66,9 +63,7 @@ describe("RustFS bucket create and delete integration", () => {
 	it("loses no data when an owned bucket is created again", async () => {
 		const first = await call(channels.bucketsCreate, duplicateBucket);
 		expect(first.ok).toBe(true);
-		await seedObjects(harness.s3Client, duplicateBucket, [
-			{ key: "keep.txt", body: "keep" },
-		]);
+		await seedObjects(harness.s3Client, duplicateBucket, [{ key: "keep.txt", body: "keep" }]);
 		const second = await call(channels.bucketsCreate, duplicateBucket);
 		// RustFS returns 200 for an owned-bucket recreate in us-east-1, as AWS may.
 		expect([
@@ -78,25 +73,19 @@ describe("RustFS bucket create and delete integration", () => {
 				error: { code: "BUCKET_EXISTS", message: "Bucket name is taken" },
 			},
 		]).toContainEqual(second);
-		const head = await harness.s3Client.send(
-			new HeadObjectCommand({ Bucket: duplicateBucket, Key: "keep.txt" }),
-		);
+		const head = await harness.s3Client.send(new HeadObjectCommand({ Bucket: duplicateBucket, Key: "keep.txt" }));
 		expect(head.ContentLength).toBe(4);
 	});
 
 	it("returns BUCKET_NOT_EMPTY and keeps the object when deleting a non-empty bucket", async () => {
 		await createTestBucket(harness.s3Client, nonEmptyBucket);
-		await seedObjects(harness.s3Client, nonEmptyBucket, [
-			{ key: "keep.txt", body: "keep" },
-		]);
+		await seedObjects(harness.s3Client, nonEmptyBucket, [{ key: "keep.txt", body: "keep" }]);
 		const result = await call(channels.bucketsDelete, nonEmptyBucket);
 		expect(result).toEqual({
 			ok: false,
 			error: { code: "BUCKET_NOT_EMPTY", message: "Bucket is not empty" },
 		});
-		const head = await harness.s3Client.send(
-			new HeadObjectCommand({ Bucket: nonEmptyBucket, Key: "keep.txt" }),
-		);
+		const head = await harness.s3Client.send(new HeadObjectCommand({ Bucket: nonEmptyBucket, Key: "keep.txt" }));
 		expect(head.ContentLength).toBe(4);
 	});
 });

@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import {
-	S3ClientFactory,
-	manualCredentialsProvider,
-} from "../../src/main/s3/client";
+import { S3ClientFactory, manualCredentialsProvider } from "../../src/main/s3/client";
 
 const originalConfig = process.env.AWS_CONFIG_FILE;
 const originalCredentials = process.env.AWS_SHARED_CREDENTIALS_FILE;
@@ -11,8 +8,7 @@ const originalProfile = process.env.AWS_PROFILE;
 function restoreEnvironment() {
 	if (originalConfig === undefined) delete process.env.AWS_CONFIG_FILE;
 	else process.env.AWS_CONFIG_FILE = originalConfig;
-	if (originalCredentials === undefined)
-		delete process.env.AWS_SHARED_CREDENTIALS_FILE;
+	if (originalCredentials === undefined) delete process.env.AWS_SHARED_CREDENTIALS_FILE;
 	else process.env.AWS_SHARED_CREDENTIALS_FILE = originalCredentials;
 	if (originalProfile === undefined) delete process.env.AWS_PROFILE;
 	else process.env.AWS_PROFILE = originalProfile;
@@ -47,10 +43,11 @@ describe("S3 client factory", () => {
 			profile: "endpoint-profile",
 			forcePathStyle: true,
 		});
-		expect((await (ownEndpoint.config as any).endpoint?.()).hostname).toBe(
-			"127.0.0.1",
-		);
-		expect((await (ownEndpoint.config as any).endpoint?.()).port).toBe(19001);
+		const ownEndpointFn = (ownEndpoint.config as any).endpoint;
+		expect(ownEndpointFn).toBeDefined();
+		const resolvedOwnEndpoint = await ownEndpointFn();
+		expect(resolvedOwnEndpoint.hostname).toBe("127.0.0.1");
+		expect(resolvedOwnEndpoint.port).toBe(19001);
 
 		const override = await factory.get({
 			id: "override",

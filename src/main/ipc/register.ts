@@ -12,7 +12,6 @@ import { connectionHandlers, type IpcDeps } from "./connections";
 import { opsHandlers, type DialogLike } from "./ops";
 import { streamHandlers, type StreamIpcDeps } from "./stream";
 import { openWithSystemApp, type OpenExternalDeps } from "../openExternal";
-import type { TransferManager } from "../s3/transfers";
 
 export interface SenderLike {
 	send(channel: string, payload: unknown): void;
@@ -22,10 +21,7 @@ export interface SenderLike {
 }
 
 export interface IpcMainLike {
-	handle(
-		channel: string,
-		listener: (event: { sender: SenderLike }, input: unknown) => unknown,
-	): void;
+	handle(channel: string, listener: (event: { sender: SenderLike }, input: unknown) => unknown): void;
 }
 
 type ChannelHandler<Key extends AnyChannel> = (
@@ -48,10 +44,7 @@ export function register(
 	const ops = opsHandlers(deps);
 	const stream = streamHandlers(deps);
 
-	function registerChannel<Key extends AnyChannel>(
-		channel: Key,
-		handler: ChannelHandler<Key>,
-	): void {
+	function registerChannel<Key extends AnyChannel>(channel: Key, handler: ChannelHandler<Key>): void {
 		ipcMain.handle(channel, async (event, input) => {
 			try {
 				const request = schemas[channel].safeParse(input ?? {});
@@ -70,17 +63,9 @@ export function register(
 					data: response,
 				});
 			} catch (error) {
-				const errorCode =
-					error &&
-					typeof error === "object" &&
-					"code" in error
-						? error.code
-						: undefined;
+				const errorCode = error && typeof error === "object" && "code" in error ? error.code : undefined;
 				const profile =
-					error &&
-					typeof error === "object" &&
-					"profile" in error &&
-					typeof error.profile === "string"
+					error && typeof error === "object" && "profile" in error && typeof error.profile === "string"
 						? error.profile
 						: undefined;
 				const message = error instanceof Error ? error.message : undefined;
@@ -91,10 +76,7 @@ export function register(
 						code,
 						message:
 							code === "REQUEST_FAILED"
-								? (message ?? "Request failed").replace(
-										/(AKIA|ASIA)[A-Z0-9]{16}/g,
-										"[redacted]",
-									)
+								? (message ?? "Request failed").replace(/(AKIA|ASIA)[A-Z0-9]{16}/g, "[redacted]")
 								: code === "ACCESS_DENIED"
 									? "Access denied"
 									: code === "INVALID_REQUEST"
@@ -140,14 +122,8 @@ export function register(
 	registerChannel(channels.opsRename, ops[channels.opsRename]);
 	registerChannel(channels.opsRenamePrefix, ops[channels.opsRenamePrefix]);
 	registerChannel(channels.transfersUpload, ops[channels.transfersUpload]);
-	registerChannel(
-		channels.transfersUploadPaths,
-		ops[channels.transfersUploadPaths],
-	);
-	registerChannel(
-		channels.transfersDownload,
-		ops[channels.transfersDownload],
-	);
+	registerChannel(channels.transfersUploadPaths, ops[channels.transfersUploadPaths]);
+	registerChannel(channels.transfersDownload, ops[channels.transfersDownload]);
 	registerChannel(channels.transfersCancel, ops[channels.transfersCancel]);
 
 	registerChannel(channels.streamOpen, stream[channels.streamOpen]);
@@ -155,8 +131,7 @@ export function register(
 
 	registerChannel(channels.filesOpenWithSystemApp, async (request) => {
 		if (
-			!deps.openExternalDeps ||
-			!deps.openExternalDeps.proxyOrigin ||
+			!deps.openExternalDeps?.proxyOrigin ||
 			!deps.openExternalDeps.fetch ||
 			!deps.openExternalDeps.tempRoot ||
 			!deps.openExternalDeps.openPath

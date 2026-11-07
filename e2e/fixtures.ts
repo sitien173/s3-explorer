@@ -1,37 +1,12 @@
 import { execFileSync } from "node:child_process";
-import {
-	mkdir,
-	mkdtemp,
-	readFile,
-	readdir,
-	rm,
-	stat,
-	writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import {
-	CreateBucketCommand,
-	ListBucketsCommand,
-	PutObjectCommand,
-	S3Client,
-} from "@aws-sdk/client-s3";
-import {
-	test as base,
-	expect,
-	_electron,
-	type ElectronApplication,
-	type Page,
-} from "@playwright/test";
+import { CreateBucketCommand, ListBucketsCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { test as base, expect, _electron, type ElectronApplication, type Page } from "@playwright/test";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
-const composeArgs = [
-	"compose",
-	"-p",
-	"s3-media-explorer-e2e",
-	"-f",
-	"test/rustfs/compose.yaml",
-];
+const composeArgs = ["compose", "-p", "s3-media-explorer-e2e", "-f", "test/rustfs/compose.yaml"];
 
 export interface E2EContext {
 	electronApp: ElectronApplication;
@@ -64,6 +39,7 @@ async function waitForRustFS(client: S3Client): Promise<void> {
 }
 
 export const test = base.extend<{ e2e: E2EContext }>({
+	// biome-ignore lint/correctness/noEmptyPattern: Playwright fixtures require a destructuring pattern as the first argument.
 	e2e: async ({}, use) => {
 		await mkdir(join(projectRoot, "test/.tmp"), { recursive: true });
 		const scratch = await mkdtemp(join(projectRoot, "test/.tmp/e2e-"));
@@ -123,9 +99,10 @@ export const test = base.extend<{ e2e: E2EContext }>({
 				}),
 			);
 
-			const env = Object.fromEntries(
-				Object.entries(process.env).filter(([, value]) => value !== undefined),
-			) as Record<string, string>;
+			const env = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)) as Record<
+				string,
+				string
+			>;
 			for (const key of Object.keys(env)) {
 				if (key.startsWith("AWS_")) {
 					delete env[key];
@@ -137,11 +114,7 @@ export const test = base.extend<{ e2e: E2EContext }>({
 			env.AWS_EC2_METADATA_DISABLED = "true";
 
 			electronApp = await _electron.launch({
-				args: [
-					join(projectRoot, "out/main/index.js"),
-					`--user-data-dir=${userData}`,
-					"--password-store=basic",
-				],
+				args: [join(projectRoot, "out/main/index.js"), `--user-data-dir=${userData}`, "--password-store=basic"],
 				cwd: projectRoot,
 				env,
 				timeout: 60_000,

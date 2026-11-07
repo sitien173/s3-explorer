@@ -25,11 +25,7 @@ const maximumUpstreamBytes = 15_728_640;
 const requestedClientBytes = 4 * 1024 * 1024;
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mediaPath = resolve(repositoryRoot, "test/.tmp/media/large.mp4");
-const rustFsComposeArgs = [
-	"compose",
-	"-f",
-	"test/rustfs/compose.yaml",
-] as const;
+const rustFsComposeArgs = ["compose", "-f", "test/rustfs/compose.yaml"] as const;
 
 type Observation = {
 	upstreamBytes: number;
@@ -70,9 +66,7 @@ function ensureLargeFixture(): number {
 	}
 	const fileBytes = statSync(mediaPath).size;
 	if (fileBytes < minimumFileBytes) {
-		throw new Error(
-			`large.mp4 is ${fileBytes} bytes; expected at least ${minimumFileBytes}`,
-		);
+		throw new Error(`large.mp4 is ${fileBytes} bytes; expected at least ${minimumFileBytes}`);
 	}
 	return fileBytes;
 }
@@ -92,10 +86,7 @@ function createRustFsClient(): S3Client {
 
 async function rustFsResponds(client: S3Client): Promise<boolean> {
 	try {
-		await client.send(
-			new ListBucketsCommand({}),
-			operationAbort ? { abortSignal: operationAbort.signal } : undefined,
-		);
+		await client.send(new ListBucketsCommand({}), operationAbort ? { abortSignal: operationAbort.signal } : undefined);
 		return true;
 	} catch {
 		return false;
@@ -106,10 +97,7 @@ function delay(milliseconds: number): Promise<void> {
 	return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
 }
 
-async function ensureRustFs(
-	client: S3Client,
-	markStarted: () => void,
-): Promise<boolean> {
+async function ensureRustFs(client: S3Client, markStarted: () => void): Promise<boolean> {
 	if (await rustFsResponds(client)) {
 		console.log("RustFS is already responding; leaving it running on exit");
 		return false;
@@ -140,17 +128,12 @@ function abortSignalFrom(value: unknown): AbortSignal | undefined {
 	return signal instanceof AbortSignal ? signal : undefined;
 }
 
-function createCountingClient(
-	client: S3Client,
-	observation: Observation,
-): S3Client {
+function createCountingClient(client: S3Client, observation: Observation): S3Client {
 	return new Proxy(client, {
 		get(target, property, receiver) {
 			if (property !== "send") return Reflect.get(target, property, receiver);
 
-			const send = target.send.bind(target) as unknown as (
-				...args: unknown[]
-			) => Promise<unknown>;
+			const send = target.send.bind(target) as unknown as (...args: unknown[]) => Promise<unknown>;
 			return async (...args: unknown[]): Promise<unknown> => {
 				if (!(args[0] instanceof GetObjectCommand)) {
 					return send(...args);
@@ -186,10 +169,7 @@ function createCountingClient(
 	});
 }
 
-async function waitForUpstreamAbort(
-	observation: Observation,
-	timeoutMs: number,
-): Promise<boolean> {
+async function waitForUpstreamAbort(observation: Observation, timeoutMs: number): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		if (observation.abortSignal?.aborted) return true;
@@ -198,10 +178,7 @@ async function waitForUpstreamAbort(
 	return observation.abortSignal?.aborted ?? false;
 }
 
-function seekAndDestroy(
-	url: string,
-	offset: number,
-): Promise<{ ttfbMs: number; clientBytes: number }> {
+function seekAndDestroy(url: string, offset: number): Promise<{ ttfbMs: number; clientBytes: number }> {
 	return new Promise((resolveResult, rejectResult) => {
 		const startedAt = performance.now();
 		let ttfbMs: number | undefined;
@@ -237,9 +214,7 @@ function seekAndDestroy(
 			},
 			(response) => {
 				if (response.statusCode !== 206) {
-					const error = new Error(
-						`Expected HTTP 206 for seek, received ${response.statusCode ?? "no status"}`,
-					);
+					const error = new Error(`Expected HTTP 206 for seek, received ${response.statusCode ?? "no status"}`);
 					response.destroy();
 					req?.destroy(error);
 					finish(error);
@@ -247,9 +222,7 @@ function seekAndDestroy(
 				}
 				response.on("data", (chunk: Buffer | string) => {
 					if (ttfbMs === undefined) ttfbMs = performance.now() - startedAt;
-					clientBytes += Buffer.isBuffer(chunk)
-						? chunk.byteLength
-						: Buffer.byteLength(chunk);
+					clientBytes += Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk);
 					if (clientBytes >= requestedClientBytes && !settled) {
 						deliberatelyDestroyed = true;
 						req?.destroy();
@@ -303,10 +276,7 @@ async function main(): Promise<void> {
 		bucketName = bucket;
 		bucketCreated = true;
 		const key = "large.mp4";
-		await rustFsClient.send(
-			new CreateBucketCommand({ Bucket: bucket }),
-			{ abortSignal: operationController.signal },
-		);
+		await rustFsClient.send(new CreateBucketCommand({ Bucket: bucket }), { abortSignal: operationController.signal });
 
 		const upload = new Upload({
 			client: rustFsClient,
@@ -351,7 +321,11 @@ async function main(): Promise<void> {
 					return id === connection.id ? connection : undefined;
 				},
 			},
-			clients: { async get() { return countingClient; } },
+			clients: {
+				async get() {
+					return countingClient;
+				},
+			},
 			appOrigin: "null",
 		});
 		await proxy.start();
@@ -392,17 +366,13 @@ async function main(): Promise<void> {
 		}
 		if (bucketCreated && bucketName) {
 			try {
-				await rustFsClient.send(
-					new DeleteObjectCommand({ Bucket: bucketName, Key: "large.mp4" }),
-				);
+				await rustFsClient.send(new DeleteObjectCommand({ Bucket: bucketName, Key: "large.mp4" }));
 			} catch (error) {
 				cleanupFailed = true;
 				console.error(`Failed to delete seek object: ${String(error)}`);
 			}
 			try {
-				await rustFsClient.send(
-					new DeleteBucketCommand({ Bucket: bucketName }),
-				);
+				await rustFsClient.send(new DeleteBucketCommand({ Bucket: bucketName }));
 			} catch (error) {
 				cleanupFailed = true;
 				console.error(`Failed to delete seek bucket: ${String(error)}`);

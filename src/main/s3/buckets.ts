@@ -16,9 +16,7 @@ export async function listBuckets(
 
 	try {
 		const result = await client.send(new ListBucketsCommand({}));
-		listedNames = (result.Buckets ?? [])
-			.map((b) => b.Name)
-			.filter((name): name is string => typeof name === "string");
+		listedNames = (result.Buckets ?? []).map((b) => b.Name).filter((name): name is string => typeof name === "string");
 	} catch (error: unknown) {
 		const candidate = error as { name?: string } | undefined;
 		if (candidate?.name === "AccessDenied") {
@@ -58,11 +56,7 @@ export async function listBuckets(
 	return { buckets, listDenied };
 }
 
-export async function createBucket(
-	client: Pick<S3Client, "send">,
-	bucket: string,
-	region?: string,
-): Promise<void> {
+export async function createBucket(client: Pick<S3Client, "send">, bucket: string, region?: string): Promise<void> {
 	await client.send(
 		new CreateBucketCommand({
 			Bucket: bucket,
@@ -73,9 +67,6 @@ export async function createBucket(
 	);
 }
 
-export async function deleteBucket(
-	client: Pick<S3Client, "send">,
-	bucket: string,
-): Promise<void> {
+export async function deleteBucket(client: Pick<S3Client, "send">, bucket: string): Promise<void> {
 	await client.send(new DeleteBucketCommand({ Bucket: bucket }));
 }

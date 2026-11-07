@@ -80,7 +80,7 @@ describe("RustFS listObjects and bucketsList integration", () => {
 
 		while (queue.length > 0) {
 			const prefix = queue.shift()!;
-			let token: string | undefined = undefined;
+			let token: string | undefined;
 
 			while (true) {
 				const res = await harness.handlers.get(channels.objectsList)!(

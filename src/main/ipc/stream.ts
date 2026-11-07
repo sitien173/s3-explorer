@@ -1,17 +1,12 @@
 import { channels } from "../../shared/channels";
-import type {
-	RequestByChannel,
-	ResponseByChannel,
-} from "../../shared/ipc";
+import type { RequestByChannel, ResponseByChannel } from "../../shared/ipc";
 import { endpointHostOf, resolveUrl } from "../url/resolve";
 import type { HandleRegistry, HandleTarget } from "../stream/handles";
 import type { StreamProxy } from "../stream/proxy";
 import type { IpcDeps } from "./connections";
 import type { SenderLike } from "./register";
 
-type StreamChannel =
-	| typeof channels.streamOpen
-	| typeof channels.streamOpenUrl;
+type StreamChannel = typeof channels.streamOpen | typeof channels.streamOpenUrl;
 export type StreamIpcDeps = IpcDeps & {
 	stream?: {
 		registry: HandleRegistry;
@@ -63,16 +58,10 @@ export function streamHandlers(deps: StreamIpcDeps): HandlerMap {
 			const connections = await deps.store.list();
 			const endpointHosts = connections
 				.map((connection) => endpointHostOf(connection.endpoint))
-				.filter(
-					(host): host is string =>
-						host !== undefined && host.length > 0,
-				);
+				.filter((host): host is string => host !== undefined && host.length > 0);
 			const resolved = resolveUrl(request.url, { endpointHosts });
 			if (!resolved.ok) {
-				const message =
-					resolved.reason === "invalid"
-						? "Invalid URL"
-						: "Unsupported URL";
+				const message = resolved.reason === "invalid" ? "Invalid URL" : "Unsupported URL";
 				throw codedError("INVALID_REQUEST", message);
 			}
 
@@ -88,17 +77,13 @@ export function streamHandlers(deps: StreamIpcDeps): HandlerMap {
 				? await deps.store.get(request.connectionId)
 				: connections.find(
 						(candidate) =>
-							candidate.pinnedBuckets.includes(value.bucket) ||
-							candidate.extraBuckets.includes(value.bucket),
+							candidate.pinnedBuckets.includes(value.bucket) || candidate.extraBuckets.includes(value.bucket),
 					);
 			if (request.connectionId && !connection) {
 				throw codedError("NOT_FOUND", "Connection not found");
 			}
 			if (!connection) {
-				throw codedError(
-					"INVALID_REQUEST",
-					"Choose a connection or anonymous access",
-				);
+				throw codedError("INVALID_REQUEST", "Choose a connection or anonymous access");
 			}
 			return describeTarget({
 				kind: "s3",

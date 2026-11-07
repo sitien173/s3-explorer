@@ -16,10 +16,7 @@ import { S3ClientFactory } from "../../src/main/s3/client";
 import type { DialogLike } from "../../src/main/ipc/ops";
 import { register, type SenderLike } from "../../src/main/ipc/register";
 
-export type IntegrationHandler = (
-	event: { sender: SenderLike },
-	input: unknown,
-) => Promise<any>;
+export type IntegrationHandler = (event: { sender: SenderLike }, input: unknown) => Promise<any>;
 
 export interface IntegrationHarness {
 	dir: string;
@@ -71,10 +68,7 @@ export function createIntegrationSender(): SenderLike & {
 }
 
 export async function setupHarness(
-	overrides: {
-		dialog?: DialogLike;
-		clients?: Pick<S3ClientFactory, "get" | "invalidate">;
-	} = {},
+	overrides: { dialog?: DialogLike; clients?: Pick<S3ClientFactory, "get" | "invalidate"> } = {},
 ): Promise<IntegrationHarness> {
 	const dir = await mkdtemp(join(tmpdir(), "s3-integ-harness-"));
 	const cipher = createFakeCipher();
@@ -105,8 +99,7 @@ export async function setupHarness(
 	const handlers = new Map<string, IntegrationHandler>();
 	register(
 		{
-			handle: (channel, listener) =>
-				handlers.set(channel, listener as IntegrationHandler),
+			handle: (channel, listener) => handlers.set(channel, listener as IntegrationHandler),
 		},
 		{
 			store,
@@ -130,10 +123,7 @@ export async function setupHarness(
 	};
 }
 
-export async function waitFor(
-	predicate: () => boolean | Promise<boolean>,
-	timeoutMs: number,
-): Promise<void> {
+export async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs: number): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (true) {
 		if (await predicate()) return;
@@ -141,24 +131,16 @@ export async function waitFor(
 		if (remaining <= 0) {
 			throw new Error(`waitFor timed out after ${timeoutMs} ms`);
 		}
-		await new Promise<void>((resolve) =>
-			setTimeout(resolve, Math.min(50, remaining)),
-		);
+		await new Promise<void>((resolve) => setTimeout(resolve, Math.min(50, remaining)));
 	}
 }
 
-export async function createTestBucket(
-	client: S3Client,
-	bucket: string,
-): Promise<void> {
+export async function createTestBucket(client: S3Client, bucket: string): Promise<void> {
 	await client.send(new CreateBucketCommand({ Bucket: bucket }));
 }
 
-export async function emptyAndDeleteBucket(
-	client: S3Client,
-	bucket: string,
-): Promise<void> {
-	let continuationToken: string | undefined = undefined;
+export async function emptyAndDeleteBucket(client: S3Client, bucket: string): Promise<void> {
+	let continuationToken: string | undefined;
 	while (true) {
 		const list: ListObjectsV2CommandOutput = (await client.send(
 			new ListObjectsV2Command({
@@ -198,10 +180,7 @@ export async function seedObjects(
 			const idx = cursor++;
 			if (idx >= keys.length) break;
 			const item = keys[idx];
-			const body =
-				typeof item.body === "string"
-					? Buffer.from(item.body)
-					: item.body ?? Buffer.from("content");
+			const body = typeof item.body === "string" ? Buffer.from(item.body) : (item.body ?? Buffer.from("content"));
 			await client.send(
 				new PutObjectCommand({
 					Bucket: bucket,

@@ -19,13 +19,16 @@ export function sanitizeToastText(text: string): string {
 		.replace(/(?:AKIA|ASIA)[0-9A-Z]{16}/gi, "[redacted]")
 		.replace(/(?:secretAccessKey|sessionToken|AWSAccessKeyId|Signature|X-Amz-[\w-]+)=?[^\s&"'<>]*/gi, "[redacted]")
 		.replace(/https?:\/\/[^\s"'<>]+/gi, "[redacted URL]")
-		.replace(/(?:[A-Za-z]:\\|~\\|~\/|\/(?:mnt|home|Users|tmp|var|usr|etc|opt|private)\/)[^\s"'<>]*/g, (path) => path.split(/[\\/]/).filter(Boolean).pop() ?? "");
+		.replace(
+			/(?:[A-Za-z]:\\|~\\|~\/|\/(?:mnt|home|Users|tmp|var|usr|etc|opt|private)\/)[^\s"'<>]*/g,
+			(path) => path.split(/[\\/]/).filter(Boolean).pop() ?? "",
+		);
 }
 
 export function cleanObjectKey(key: string): string {
 	if (!key) return "object";
 	const pathLike = /^[A-Za-z]:[\\/]|^~[\\/]|^\//i.test(key);
-	const name = pathLike ? key.split(/[\\/]/).filter(Boolean).pop() ?? "" : key;
+	const name = pathLike ? (key.split(/[\\/]/).filter(Boolean).pop() ?? "") : key;
 	const cleaned = sanitizeToastText(name).trim();
 	return cleaned && !/\[redacted|secret|token/i.test(cleaned) ? cleaned : "object";
 }
@@ -61,7 +64,12 @@ export function buildFolderCreatedToast(name: string): ToastDescriptor {
 }
 
 export function buildRenameDoneToast(toKey: string): ToastDescriptor {
-	const cleaned = cleanObjectKey(toKey.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? toKey);
+	const cleaned = cleanObjectKey(
+		toKey
+			.replace(/[\\/]+$/, "")
+			.split(/[\\/]/)
+			.pop() ?? toKey,
+	);
 	return {
 		type: "success",
 		message: `Renamed to ${cleaned}`,
@@ -82,10 +90,7 @@ export function buildDeleteDoneToast(target: string | number): ToastDescriptor {
 	};
 }
 
-export function buildTransferFailedToast(
-	key: string,
-	_error?: string,
-): ToastDescriptor {
+export function buildTransferFailedToast(key: string, _error?: string): ToastDescriptor {
 	const cleanedKey = cleanObjectKey(key);
 	return {
 		type: "error",
@@ -94,13 +99,17 @@ export function buildTransferFailedToast(
 	};
 }
 
-export function buildOperationFailedToast(
-	operation: string,
-	_error?: string,
-): ToastDescriptor {
+export function buildOperationFailedToast(operation: string, _error?: string): ToastDescriptor {
 	const operations: Record<string, string> = {
-		Upload: "Upload", Download: "Download", Delete: "Delete", Rename: "Rename",
-		"Create folder": "Create folder", "Create bucket": "Create bucket", "Delete bucket": "Delete bucket", "Open with system app": "Open with system app", "Cancel transfer": "Cancel transfer",
+		Upload: "Upload",
+		Download: "Download",
+		Delete: "Delete",
+		Rename: "Rename",
+		"Create folder": "Create folder",
+		"Create bucket": "Create bucket",
+		"Delete bucket": "Delete bucket",
+		"Open with system app": "Open with system app",
+		"Cancel transfer": "Cancel transfer",
 	};
 	const safeOperation = operations[operation] ?? "Operation";
 	return {
@@ -169,15 +178,9 @@ notify.uploadDone = (key: string) => notify(buildUploadDoneToast(key));
 notify.downloadDone = (key: string) => notify(buildDownloadDoneToast(key));
 notify.folderCreated = (name: string) => notify(buildFolderCreatedToast(name));
 notify.renameDone = (toKey: string) => notify(buildRenameDoneToast(toKey));
-notify.deleteDone = (target: string | number) =>
-	notify(buildDeleteDoneToast(target));
-notify.transferFailed = (key: string, error?: string) =>
-	notify(buildTransferFailedToast(key, error));
-notify.operationFailed = (op: string, error?: string) =>
-	notify(buildOperationFailedToast(op, error));
-notify.partialFailure = (
-	report: { completedCount: number; remainingCount: number },
-	onAction: () => void,
-) => notify(buildPartialFailureToast(report, onAction));
-notify.rejectedUploads = (count: number) =>
-	notify(buildRejectedUploadToast(count));
+notify.deleteDone = (target: string | number) => notify(buildDeleteDoneToast(target));
+notify.transferFailed = (key: string, error?: string) => notify(buildTransferFailedToast(key, error));
+notify.operationFailed = (op: string, error?: string) => notify(buildOperationFailedToast(op, error));
+notify.partialFailure = (report: { completedCount: number; remainingCount: number }, onAction: () => void) =>
+	notify(buildPartialFailureToast(report, onAction));
+notify.rejectedUploads = (count: number) => notify(buildRejectedUploadToast(count));

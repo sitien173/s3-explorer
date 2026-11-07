@@ -7,11 +7,7 @@ import { ConnectionStore } from "../../src/main/connections/store";
 import { SecretVault } from "../../src/main/connections/secrets";
 import type { DialogLike } from "../../src/main/ipc/ops";
 import { register, type SenderLike } from "../../src/main/ipc/register";
-import {
-	TransferManager,
-	type DownloadInput,
-	type UploadInput,
-} from "../../src/main/s3/transfers";
+import { TransferManager, type DownloadInput, type UploadInput } from "../../src/main/s3/transfers";
 import { channels, events } from "../../src/shared/channels";
 import {
 	opsProgressPayloadSchema,
@@ -49,14 +45,8 @@ function sender(): SenderLike & {
 describe("ops IPC", () => {
 	it("registers all six operation channels", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "ops-ipc-"));
-		const store = new ConnectionStore(
-			dir,
-			new SecretVault(dir, cipher() as never),
-		);
-		const handlers = new Map<
-			string,
-			(event: { sender: SenderLike }, input: unknown) => unknown
-		>();
+		const store = new ConnectionStore(dir, new SecretVault(dir, cipher() as never));
+		const handlers = new Map<string, (event: { sender: SenderLike }, input: unknown) => unknown>();
 		register(
 			{
 				handle: (channel, listener) => {
@@ -80,10 +70,7 @@ describe("ops IPC", () => {
 	});
 	it("validates request, resolves connection, reports partial operation and emits validated progress safely", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "ops-ipc-real-"));
-		const store = new ConnectionStore(
-			dir,
-			new SecretVault(dir, cipher() as never),
-		);
+		const store = new ConnectionStore(dir, new SecretVault(dir, cipher() as never));
 		const connection = await store.create({
 			kind: "manual",
 			name: "Fixture",
@@ -91,23 +78,16 @@ describe("ops IPC", () => {
 			accessKeyId: "AKIAFIXTUREFIXTURE00",
 			secretAccessKey: "fixture-secret",
 		});
-		const handlers = new Map<
-			string,
-			(event: { sender: SenderLike }, input: unknown) => unknown
-		>();
+		const handlers = new Map<string, (event: { sender: SenderLike }, input: unknown) => unknown>();
 		const calls: string[] = [];
 		const client = {
-			send: async (command: {
-				constructor: { name: string };
-				input: Record<string, unknown>;
-			}) => {
+			send: async (command: { constructor: { name: string }; input: Record<string, unknown> }) => {
 				calls.push(command.constructor.name);
 				if (command.constructor.name === "ListObjectsV2Command")
 					return command.input.Prefix === "docs/"
 						? { Contents: [{ Key: "docs/a", Size: 1 }], IsTruncated: false }
 						: { Contents: [], IsTruncated: false };
-				if (command.constructor.name === "CopyObjectCommand")
-					return { CopyObjectResult: { ETag: "etag" } };
+				if (command.constructor.name === "CopyObjectCommand") return { CopyObjectResult: { ETag: "etag" } };
 				if (command.constructor.name === "DeleteObjectCommand")
 					throw Object.assign(new Error("AKIAFIXTUREFIXTURE00"), {
 						name: "AccessDenied",
@@ -116,18 +96,13 @@ describe("ops IPC", () => {
 					const input = command.input.Delete as { Objects: { Key: string }[] };
 					return { Deleted: input.Objects.map((item) => ({ Key: item.Key })) };
 				}
-				return {}; 
+				return {};
 			},
 		};
 		register(
 			{
 				handle: (channel, listener) => {
-					handlers.set(
-						channel,
-						listener as typeof handlers extends Map<string, infer F>
-							? F
-							: never,
-					);
+					handlers.set(channel, listener as typeof handlers extends Map<string, infer F> ? F : never);
 				},
 			},
 			{ store, clients: { get: async () => client } as never },
@@ -182,25 +157,13 @@ describe("ops IPC", () => {
 		});
 		const progress = s.sent.filter((x) => x.channel === events.opsProgress);
 		expect(progress.length).toBeGreaterThan(0);
-		for (const entry of progress)
-			expect(opsProgressPayloadSchema.parse(entry.payload)).toEqual(
-				entry.payload,
-			);
-		for (const response of [
-			invalid,
-			missing,
-			result,
-			deleted,
-			...s.sent.map((x) => x.payload),
-		])
+		for (const entry of progress) expect(opsProgressPayloadSchema.parse(entry.payload)).toEqual(entry.payload);
+		for (const response of [invalid, missing, result, deleted, ...s.sent.map((x) => x.payload)])
 			assertNoSecrets(response);
 	});
 	it("does not send progress after the requesting sender is destroyed", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "ops-ipc-destroy-"));
-		const store = new ConnectionStore(
-			dir,
-			new SecretVault(dir, cipher() as never),
-		);
+		const store = new ConnectionStore(dir, new SecretVault(dir, cipher() as never));
 		const connection = await store.create({
 			kind: "manual",
 			name: "Fixture",
@@ -208,10 +171,7 @@ describe("ops IPC", () => {
 			accessKeyId: "AKIAFIXTUREFIXTURE00",
 			secretAccessKey: "fixture-secret",
 		});
-		const handlers = new Map<
-			string,
-			(event: { sender: SenderLike }, input: unknown) => unknown
-		>();
+		const handlers = new Map<string, (event: { sender: SenderLike }, input: unknown) => unknown>();
 		let senderRef: ReturnType<typeof sender>;
 		const client = {
 			send: async (command: { constructor: { name: string } }) => {
@@ -280,18 +240,10 @@ describe("transfer IPC", () => {
 	}
 
 	async function harness(
-		options: {
-			dialog?: DialogLike | null;
-			maxActiveTransfers?: number;
-			useManager?: boolean;
-			client?: unknown;
-		} = {},
+		options: { dialog?: DialogLike | null; maxActiveTransfers?: number; useManager?: boolean; client?: unknown } = {},
 	) {
 		const dir = await tempDir("transfer-ipc-");
-		const store = new ConnectionStore(
-			dir,
-			new SecretVault(dir, cipher() as never),
-		);
+		const store = new ConnectionStore(dir, new SecretVault(dir, cipher() as never));
 		const connection = await store.create({
 			kind: "manual",
 			name: "Fixture",
@@ -342,17 +294,11 @@ describe("transfer IPC", () => {
 				store,
 				clients: { get: async () => options.client ?? { send: async () => ({}) } } as never,
 				...(dialog ? { dialog } : {}),
-				...(options.maxActiveTransfers
-					? { maxActiveTransfers: options.maxActiveTransfers }
-					: {}),
+				...(options.maxActiveTransfers ? { maxActiveTransfers: options.maxActiveTransfers } : {}),
 				...(options.useManager === false ? {} : { transfers: manager }),
 			},
 		);
-		async function call(
-			channel: string,
-			from: FakeSender,
-			input: unknown,
-		): Promise<unknown> {
+		async function call(channel: string, from: FakeSender, input: unknown): Promise<unknown> {
 			const handler = handlers.get(channel);
 			if (!handler) {
 				return { ok: false, error: { code: "UNREGISTERED", message: channel } };
@@ -364,14 +310,10 @@ describe("transfer IPC", () => {
 				for (const entry of from.sent) {
 					assertNoSecrets(entry.payload);
 					if (entry.channel === events.transferProgress) {
-						expect(transferProgressPayloadSchema.parse(entry.payload)).toEqual(
-							entry.payload,
-						);
+						expect(transferProgressPayloadSchema.parse(entry.payload)).toEqual(entry.payload);
 					}
 					if (entry.channel === events.transferDone) {
-						expect(transferDonePayloadSchema.parse(entry.payload)).toEqual(
-							entry.payload,
-						);
+						expect(transferDonePayloadSchema.parse(entry.payload)).toEqual(entry.payload);
 					}
 				}
 			}
@@ -380,8 +322,7 @@ describe("transfer IPC", () => {
 			(
 				from.sent.find(
 					(entry) =>
-						entry.channel === events.transferDone &&
-						(entry.payload as { transferId: string }).transferId === id,
+						entry.channel === events.transferDone && (entry.payload as { transferId: string }).transferId === id,
 				)?.payload as { status: string } | undefined
 			)?.status;
 		return {
@@ -433,10 +374,7 @@ describe("transfer IPC", () => {
 		const second = join(directory, "photo.png");
 		await writeFile(first, "a");
 		await writeFile(second, "b");
-		const picker = fakeDialog(
-			{ canceled: false, filePaths: [first, second] },
-			{ canceled: true },
-		);
+		const picker = fakeDialog({ canceled: false, filePaths: [first, second] }, { canceled: true });
 		const t = await harness({ dialog: picker.dialog });
 		const owner = sender();
 		const response = await t.call(channels.transfersUpload, owner, {
@@ -444,9 +382,7 @@ describe("transfer IPC", () => {
 			bucket: "bucket",
 			prefix: "docs/",
 		});
-		expect(picker.openCalls).toEqual([
-			{ properties: ["openFile", "multiSelections"] },
-		]);
+		expect(picker.openCalls).toEqual([{ properties: ["openFile", "multiSelections"] }]);
 		expect(response).toMatchObject({ ok: true });
 		const ids = dataOf(response).transferIds as string[];
 		expect(ids).toHaveLength(2);
@@ -455,9 +391,7 @@ describe("transfer IPC", () => {
 			["docs/report.txt", first],
 			["docs/photo.png", second],
 		]);
-		expect(t.uploads.map((upload) => upload.key)).toEqual(
-			[first, second].map((path) => `docs/${basename(path)}`),
-		);
+		expect(t.uploads.map((upload) => upload.key)).toEqual([first, second].map((path) => `docs/${basename(path)}`));
 		for (const id of ids) expect(t.doneStatus(owner, id)).toBe("completed");
 		t.assertAllSafe(owner);
 		assertNoSecrets(response);
@@ -480,10 +414,7 @@ describe("transfer IPC", () => {
 	it("opens the save dialog with the key's last segment and downloads", async () => {
 		const directory = await tempDir("transfer-save-");
 		const destPath = join(directory, "chosen.txt");
-		const picker = fakeDialog(
-			{ canceled: true, filePaths: [] },
-			{ canceled: false, filePath: destPath },
-		);
+		const picker = fakeDialog({ canceled: true, filePaths: [] }, { canceled: false, filePath: destPath });
 		const t = await harness({ dialog: picker.dialog });
 		const owner = sender();
 		const response = await t.call(channels.transfersDownload, owner, {
@@ -495,9 +426,7 @@ describe("transfer IPC", () => {
 		const id = dataOf(response).transferId as string;
 		expect(typeof id).toBe("string");
 		await waitFor(() => t.doneStatus(owner, id) !== undefined);
-		expect(t.downloads.map((item) => [item.key, item.destPath])).toEqual([
-			["docs/deep/report.txt", destPath],
-		]);
+		expect(t.downloads.map((item) => [item.key, item.destPath])).toEqual([["docs/deep/report.txt", destPath]]);
 		expect(t.doneStatus(owner, id)).toBe("completed");
 		t.assertAllSafe(owner);
 		assertNoSecrets(response);
@@ -620,23 +549,26 @@ describe("transfer IPC", () => {
 		});
 		const id = (dataOf(started).transferIds as string[])[0] as string;
 		await waitFor(() => t.uploads.length === 1);
-		expect(await t.call(channels.transfersCancel, foreign, { transferId: id })).toEqual(
-			{ ok: true, data: { cancelled: false } },
-		);
+		expect(await t.call(channels.transfersCancel, foreign, { transferId: id })).toEqual({
+			ok: true,
+			data: { cancelled: false },
+		});
 		expect(
 			await t.call(channels.transfersCancel, owner, {
 				transferId: "unknown-transfer-id",
 			}),
 		).toEqual({ ok: true, data: { cancelled: false } });
-		expect(await t.call(channels.transfersCancel, owner, { transferId: id })).toEqual(
-			{ ok: true, data: { cancelled: true } },
-		);
+		expect(await t.call(channels.transfersCancel, owner, { transferId: id })).toEqual({
+			ok: true,
+			data: { cancelled: true },
+		});
 		await waitFor(() => t.doneStatus(owner, id) !== undefined);
 		expect(t.doneStatus(owner, id)).toBe("cancelled");
 		expect(foreign.sent).toEqual([]);
-		expect(await t.call(channels.transfersCancel, owner, { transferId: id })).toEqual(
-			{ ok: true, data: { cancelled: false } },
-		);
+		expect(await t.call(channels.transfersCancel, owner, { transferId: id })).toEqual({
+			ok: true,
+			data: { cancelled: false },
+		});
 		t.assertAllSafe(owner, foreign);
 	});
 
@@ -666,10 +598,7 @@ describe("transfer IPC", () => {
 
 	it("honors maxActiveTransfers", async () => {
 		const directory = await tempDir("transfer-max-");
-		const picker = fakeDialog(
-			{ canceled: true, filePaths: [] },
-			{ canceled: false, filePath: join(directory, "out") },
-		);
+		const picker = fakeDialog({ canceled: true, filePaths: [] }, { canceled: false, filePath: join(directory, "out") });
 		const gets: string[] = [];
 		const client = {
 			send: (command: unknown, options?: { abortSignal?: AbortSignal }) => {

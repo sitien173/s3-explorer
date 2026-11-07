@@ -41,10 +41,7 @@ function bucketListWarning(verb: "created" | "deleted") {
 	return `Bucket ${verb}, but the saved bucket list could not be updated`;
 }
 
-function throwBucketMutationError(
-	error: unknown,
-	connection: { kind?: string; profile?: string },
-): never {
+function throwBucketMutationError(error: unknown, connection: { kind?: string; profile?: string }): never {
 	if (mapS3Error(error, connection).code === "REQUEST_FAILED") {
 		throw codedError("REQUEST_FAILED", "Request failed");
 	}
@@ -55,10 +52,7 @@ function codedError(code: string, message: string) {
 	return Object.assign(new Error(message), { code });
 }
 
-export function mapS3Error(
-	error: unknown,
-	connection?: { kind?: string; profile?: string },
-): IpcError {
+export function mapS3Error(error: unknown, connection?: { kind?: string; profile?: string }): IpcError {
 	if (connection?.kind === "profile") {
 		const sso = mapSsoError(error, connection.profile ?? "");
 		if (sso) {
@@ -92,22 +86,14 @@ export function mapS3Error(
 			message: "Request failed",
 		};
 	}
-	const message =
-		candidate?.message ??
-		(error instanceof Error ? error.message : String(error));
+	const message = candidate?.message ?? (error instanceof Error ? error.message : String(error));
 	return {
 		code: "REQUEST_FAILED",
-		message: `${name ?? "Error"}: ${message}`.replace(
-			/(AKIA|ASIA)[A-Z0-9]{16}/g,
-			"[redacted]",
-		),
+		message: `${name ?? "Error"}: ${message}`.replace(/(AKIA|ASIA)[A-Z0-9]{16}/g, "[redacted]"),
 	};
 }
 
-export function throwMappedError(
-	error: unknown,
-	connection?: { kind?: string; profile?: string },
-): never {
+export function throwMappedError(error: unknown, connection?: { kind?: string; profile?: string }): never {
 	const mapped = mapS3Error(error, connection);
 	throw Object.assign(new Error(mapped.message), mapped);
 }
@@ -194,9 +180,7 @@ export function browseHandlers(
 		[channels.bucketsUnpin]: async (input: RequestByChannel[typeof channels.bucketsUnpin]) => {
 			const connection = await deps.store.get(input.connectionId);
 			if (!connection) throw codedError("NOT_FOUND", "Connection not found");
-			const pinnedBuckets = connection.pinnedBuckets.filter(
-				(b) => b !== input.bucket,
-			);
+			const pinnedBuckets = connection.pinnedBuckets.filter((b) => b !== input.bucket);
 			const updated = await deps.store.update(input.connectionId, {
 				pinnedBuckets,
 			});

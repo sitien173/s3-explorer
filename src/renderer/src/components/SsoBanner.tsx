@@ -1,19 +1,15 @@
 import { useState, type JSX } from "react";
 import { api, unwrap } from "../api";
-import { Alert } from "./ui/alert";
+import { Alert, AlertTitle } from "./ui/alert";
+import { Button } from "./ui/button";
 
 export interface SsoBannerProps {
 	profile: string;
 	onSignedIn?: () => void;
 }
 
-export function SsoBanner({
-	profile,
-	onSignedIn,
-}: SsoBannerProps): JSX.Element {
-	const [status, setStatus] = useState<"idle" | "signing_in" | "failed">(
-		"idle",
-	);
+export function SsoBanner({ profile, onSignedIn }: SsoBannerProps): JSX.Element {
+	const [status, setStatus] = useState<"idle" | "signing_in" | "failed">("idle");
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
 	async function handleSignIn(): Promise<void> {
@@ -37,37 +33,31 @@ export function SsoBanner({
 	}
 
 	return (
-		<Alert className="tds-announcement--warning app-sso-banner">
-			<div className="tds-announcement__content">
-				<div className="tds-announcement__title">
-					SSO session expired
-				</div>
-				<div className="tds-announcement__message">
+		<Alert className="mb-2">
+			<div className="min-w-0 flex-1">
+				<AlertTitle>SSO session expired</AlertTitle>
+				<div>
 					Profile <strong>{profile}</strong> requires authentication.
 					{status === "failed" && (
-						<div className="app-sso-command">
-							{errorMessage && (
-								<div className="app-sso-error">
-									{errorMessage}
-								</div>
-							)}
+						<div className="mt-2 rounded-control bg-foreground/[0.06] px-2 py-1 text-xs">
+							{errorMessage && <div className="mb-2 text-destructive">{errorMessage}</div>}
 							<div>Run in terminal:</div>
 							<code>aws sso login --profile {profile}</code>
 						</div>
 					)}
 				</div>
 			</div>
-			<div className="tds-announcement__actions">
-				<button
+			<div className="shrink-0">
+				<Button
 					type="button"
-					className="tds-btn tds-btn--sm tds-btn--primary"
+					size="sm"
 					disabled={status === "signing_in"}
 					onClick={() => {
 						void handleSignIn();
 					}}
 				>
 					{status === "signing_in" ? "Signing in..." : "Sign in"}
-				</button>
+				</Button>
 			</div>
 		</Alert>
 	);

@@ -2,26 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 
 interface TextReaderModule {
 	MAX_TEXT_PREVIEW_BYTES: number;
-	readBoundedStream(
-		body: ReadableStream<Uint8Array> | null,
-		maxBytes?: number,
-	): Promise<Uint8Array>;
+	readBoundedStream(body: ReadableStream<Uint8Array> | null, maxBytes?: number): Promise<Uint8Array>;
 	trimIncompleteTrailingUtf8(bytes: Uint8Array): Uint8Array;
 	decodeUtf8Bounded(bytes: Uint8Array): string;
 }
 
 const modulePath = "../../src/renderer/src/textReader";
-const {
-	MAX_TEXT_PREVIEW_BYTES,
-	readBoundedStream,
-	trimIncompleteTrailingUtf8,
-	decodeUtf8Bounded,
-} = (await import(modulePath)) as TextReaderModule;
+const { MAX_TEXT_PREVIEW_BYTES, readBoundedStream, trimIncompleteTrailingUtf8, decodeUtf8Bounded } = (await import(
+	modulePath
+)) as TextReaderModule;
 
-function createMockStream(
-	chunks: Uint8Array[],
-	onCancel?: () => void,
-): ReadableStream<Uint8Array> {
+function createMockStream(chunks: Uint8Array[], onCancel?: () => void): ReadableStream<Uint8Array> {
 	let index = 0;
 	return new ReadableStream<Uint8Array>({
 		pull(controller) {

@@ -14,58 +14,44 @@ import {
 import { events, channels } from "../../src/shared/channels";
 import { eventSchemas, responseSchemas, schemas } from "../../src/shared/ipc";
 
-const client = (
-	fn: (command: {
-		constructor: { name: string };
-		input: Record<string, unknown>;
-	}) => Promise<unknown>,
-) => ({ send: fn }) as never;
+const client = (fn: (command: { constructor: { name: string }; input: Record<string, unknown> }) => Promise<unknown>) =>
+	({ send: fn }) as never;
 
 describe("Phase 4 contract A schemas and pure helpers", () => {
-	it.each([0, 1, 999, 1000, 1001, 2500])(
-		"deduplicates and splits %i keys",
-		(n) => {
-			const keys = Array.from({ length: n }, (_, i) => `k${i}`);
-			if (n > 1) keys.push("k0");
-			const batches = batchKeys(keys);
-			expect(batches.flat()).toEqual(
-				Array.from({ length: n }, (_, i) => `k${i}`),
-			);
-			expect(batches.every((b) => b.length <= 1000)).toBe(true);
-		},
-	);
+	it.each([0, 1, 999, 1000, 1001, 2500])("deduplicates and splits %i keys", (n) => {
+		const keys = Array.from({ length: n }, (_, i) => `k${i}`);
+		if (n > 1) keys.push("k0");
+		const batches = batchKeys(keys);
+		expect(batches.flat()).toEqual(Array.from({ length: n }, (_, i) => `k${i}`));
+		expect(batches.every((b) => b.length <= 1000)).toBe(true);
+	});
 	it("maps keys by prefix slicing without prefix-boundary assumptions", () => {
 		expect(mapPrefixKey("root/child/a", "root/child/", "root/")).toBe("root/a");
 		expect(mapPrefixKey("a/b/c", "a/", "a/b/")).toBe("a/b/b/c");
 	});
 	it("encodes copy sources per path segment", () =>
-		expect(copySource("bucket", "a space/雪+%25.txt")).toBe(
-			"bucket/a%20space/%E9%9B%AA%2B%2525.txt",
-		));
+		expect(copySource("bucket", "a space/雪+%25.txt")).toBe("bucket/a%20space/%E9%9B%AA%2B%2525.txt"));
 	it.each([
 		["same/", "same/"],
 		["a/", "a/child/"],
-	])(
-		"rejects folder move into itself (%s -> %s) before S3",
-		async (from, to) => {
-			const calls: string[] = [];
-			await expect(
-				renamePrefix(
-					client(async (c) => {
-						calls.push(c.constructor.name);
-						return {};
-					}),
-					"b",
-					from,
-					to,
-				),
-			).rejects.toMatchObject({
-				code: "INVALID_REQUEST",
-				message: "Cannot move a folder into itself",
-			});
-			expect(calls).toEqual([]);
-		},
-	);
+	])("rejects folder move into itself (%s -> %s) before S3", async (from, to) => {
+		const calls: string[] = [];
+		await expect(
+			renamePrefix(
+				client(async (c) => {
+					calls.push(c.constructor.name);
+					return {};
+				}),
+				"b",
+				from,
+				to,
+			),
+		).rejects.toMatchObject({
+			code: "INVALID_REQUEST",
+			message: "Cannot move a folder into itself",
+		});
+		expect(calls).toEqual([]);
+	});
 	it("rejects same key before issuing S3 calls", async () => {
 		const calls: string[] = [];
 		await expect(
@@ -89,10 +75,8 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			const calls: string[] = [];
 			const s = client(async (c) => {
 				calls.push(c.constructor.name);
-				if (c.constructor.name === "HeadObjectCommand" && c.input.Key === "src")
-					return { ContentLength: size };
-				if (c.constructor.name === "HeadObjectCommand")
-					throw Object.assign(new Error(), { name: "NotFound" });
+				if (c.constructor.name === "HeadObjectCommand" && c.input.Key === "src") return { ContentLength: size };
+				if (c.constructor.name === "HeadObjectCommand") throw Object.assign(new Error(), { name: "NotFound" });
 				return { CopyObjectResult: { ETag: "etag" } };
 			});
 			if (size === MAX_COPY_BYTES)
@@ -106,56 +90,47 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			expect(calls.includes("CopyObjectCommand")).toBe(size === MAX_COPY_BYTES);
 		}
 	});
-	it.each([
-		"copy throws",
-		"copy lacks etag",
-		"source head fails",
-		"destination exists",
-	])("does not delete unless copy confirmed (%s)", async (scenario) => {
-		const calls: string[] = [];
-		const s = client(async (c) => {
-			calls.push(c.constructor.name);
-			if (c.constructor.name === "HeadObjectCommand") {
-				if (scenario === "source head fails" && c.input.Key === "src")
-					throw Object.assign(new Error(), { name: "NotFound" });
-				if (scenario === "destination exists" && c.input.Key === "dst")
-					return {};
-				if (c.input.Key === "dst")
-					throw Object.assign(new Error(), { name: "NotFound" });
-				return { ContentLength: 2 };
-			}
-			if (c.constructor.name === "CopyObjectCommand") {
-				if (scenario === "copy throws") throw new Error("copy error");
-				return scenario === "copy lacks etag"
-					? {}
-					: { CopyObjectResult: { ETag: "e" } };
-			}
-			return {};
-		});
-		if (scenario === "destination exists")
-			await expect(renameObject(s, "b", "src", "dst")).rejects.toMatchObject({
-				code: "CONFLICT",
+	it.each(["copy throws", "copy lacks etag", "source head fails", "destination exists"])(
+		"does not delete unless copy confirmed (%s)",
+		async (scenario) => {
+			const calls: string[] = [];
+			const s = client(async (c) => {
+				calls.push(c.constructor.name);
+				if (c.constructor.name === "HeadObjectCommand") {
+					if (scenario === "source head fails" && c.input.Key === "src")
+						throw Object.assign(new Error(), { name: "NotFound" });
+					if (scenario === "destination exists" && c.input.Key === "dst") return {};
+					if (c.input.Key === "dst") throw Object.assign(new Error(), { name: "NotFound" });
+					return { ContentLength: 2 };
+				}
+				if (c.constructor.name === "CopyObjectCommand") {
+					if (scenario === "copy throws") throw new Error("copy error");
+					return scenario === "copy lacks etag" ? {} : { CopyObjectResult: { ETag: "e" } };
+				}
+				return {};
 			});
-		else if (scenario === "source head fails")
-			await expect(renameObject(s, "b", "src", "dst")).rejects.toMatchObject({
-				code: "NOT_FOUND",
-			});
-		else
-			await expect(renameObject(s, "b", "src", "dst")).rejects.toThrow(
-				scenario === "copy lacks etag" ? "Copy not confirmed" : "copy error",
-			);
-		expect(calls.includes("DeleteObjectCommand")).toBe(false);
-		if (scenario === "destination exists")
-			expect(calls.includes("CopyObjectCommand")).toBe(false);
-	});
+			if (scenario === "destination exists")
+				await expect(renameObject(s, "b", "src", "dst")).rejects.toMatchObject({
+					code: "CONFLICT",
+				});
+			else if (scenario === "source head fails")
+				await expect(renameObject(s, "b", "src", "dst")).rejects.toMatchObject({
+					code: "NOT_FOUND",
+				});
+			else
+				await expect(renameObject(s, "b", "src", "dst")).rejects.toThrow(
+					scenario === "copy lacks etag" ? "Copy not confirmed" : "copy error",
+				);
+			expect(calls.includes("DeleteObjectCommand")).toBe(false);
+			if (scenario === "destination exists") expect(calls.includes("CopyObjectCommand")).toBe(false);
+		},
+	);
 	it("pages rename listings, copies/deletes sequentially, and emits progress counts", async () => {
 		const seen: string[] = [];
 		let sourcePage = 0;
 		const progress: Array<[number, number]> = [];
 		const stub = client(async (c) => {
-			seen.push(
-				c.constructor.name + ":" + String(c.input.Prefix ?? c.input.Key ?? ""),
-			);
+			seen.push(`${c.constructor.name}:${String(c.input.Prefix ?? c.input.Key ?? "")}`);
 			if (c.constructor.name === "ListObjectsV2Command") {
 				if (c.input.Prefix === "src/") {
 					sourcePage++;
@@ -169,14 +144,11 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 				}
 				return { Contents: [], IsTruncated: false };
 			}
-			if (c.constructor.name === "CopyObjectCommand")
-				return { CopyObjectResult: { ETag: "ok" } };
+			if (c.constructor.name === "CopyObjectCommand") return { CopyObjectResult: { ETag: "ok" } };
 			return {};
 		});
 		await expect(
-			renamePrefix(stub, "bucket", "src/", "dst/", (done, total) =>
-				progress.push([done, total]),
-			),
+			renamePrefix(stub, "bucket", "src/", "dst/", (done, total) => progress.push([done, total])),
 		).resolves.toEqual({ completed: ["src/a", "src/b"], remaining: [] });
 		expect(seen).toEqual([
 			"ListObjectsV2Command:src/",
@@ -210,11 +182,11 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 	it("preflights oversized objects and mapped destination collisions", async () => {
 		for (const scenario of ["large", "collision"]) {
 			let copies = 0;
-			let srcPage = 0;
+			let _srcPage = 0;
 			const stub = client(async (c) => {
 				if (c.constructor.name === "ListObjectsV2Command") {
 					if (c.input.Prefix === "src/") {
-						srcPage++;
+						_srcPage++;
 						return {
 							Contents: [
 								{
@@ -227,17 +199,14 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 						};
 					}
 					return {
-						Contents:
-							scenario === "collision" ? [{ Key: "dst/b", Size: 1 }] : [],
+						Contents: scenario === "collision" ? [{ Key: "dst/b", Size: 1 }] : [],
 						IsTruncated: false,
 					};
 				}
 				if (c.constructor.name === "CopyObjectCommand") copies++;
 				return {};
 			});
-			await expect(
-				renamePrefix(stub, "b", "src/", "dst/"),
-			).rejects.toMatchObject({
+			await expect(renamePrefix(stub, "b", "src/", "dst/")).rejects.toMatchObject({
 				code: scenario === "large" ? "TOO_LARGE" : "CONFLICT",
 			});
 			expect(copies).toBe(0);
@@ -249,10 +218,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			commands.push(command.constructor.name);
 			if (command.constructor.name === "ListObjectsV2Command") {
 				return {
-					Contents:
-						command.input.Prefix === "a/b/"
-							? [{ Key: "a/b/c", Size: 1 }]
-							: [{ Key: "a/c", Size: 1 }],
+					Contents: command.input.Prefix === "a/b/" ? [{ Key: "a/b/c", Size: 1 }] : [{ Key: "a/c", Size: 1 }],
 					IsTruncated: false,
 				};
 			}
@@ -279,7 +245,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 		const failingKey = "src/b";
 		const events: string[] = [];
 		const stub = client(async (c) => {
-			events.push(c.constructor.name + ":" + String(c.input.Key ?? ""));
+			events.push(`${c.constructor.name}:${String(c.input.Key ?? "")}`);
 			if (c.constructor.name === "ListObjectsV2Command")
 				return {
 					Contents:
@@ -292,8 +258,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 							: [],
 					IsTruncated: false,
 				};
-			if (c.constructor.name === "CopyObjectCommand")
-				return { CopyObjectResult: { ETag: "e" } };
+			if (c.constructor.name === "CopyObjectCommand") return { CopyObjectResult: { ETag: "e" } };
 			if (c.constructor.name === "DeleteObjectCommand" && c.input.Key === failingKey)
 				throw Object.assign(new Error("private"), { name: "AccessDenied" });
 			return {};
@@ -305,39 +270,29 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			code: "ACCESS_DENIED",
 			message: "Access denied",
 		});
-		expect(events.slice(-2)).toEqual([
-			"CopyObjectCommand:dst/b",
-			"DeleteObjectCommand:src/b",
-		]);
+		expect(events.slice(-2)).toEqual(["CopyObjectCommand:dst/b", "DeleteObjectCommand:src/b"]);
 	});
 	it("deletes 2500 keys in three calls in sequence and removes duplicates", async () => {
 		const calls: Array<{ name: string; input: Record<string, unknown> }> = [];
 		const stub = client(async (c) => {
 			calls.push({ name: c.constructor.name, input: c.input });
 			return {
-				Deleted: (c.input.Delete as { Objects: { Key: string }[] }).Objects.map(
-					(x) => ({ Key: x.Key }),
-				),
+				Deleted: (c.input.Delete as { Objects: { Key: string }[] }).Objects.map((x) => ({ Key: x.Key })),
 			};
 		});
 		const keys = Array.from({ length: 2500 }, (_, i) => `k${i}`);
 		keys.push("k0");
 		const progress: Array<[number, number]> = [];
-		const result = await deleteKeys(stub, "b", keys, (done, total) =>
-			progress.push([done, total]),
-		);
+		const result = await deleteKeys(stub, "b", keys, (done, total) => progress.push([done, total]));
 		expect(progress).toEqual([
 			[1000, 2500],
 			[2000, 2500],
 			[2500, 2500],
 		]);
 		expect(calls).toHaveLength(3);
-		expect(
-			calls.map(
-				(x) =>
-					(x.input.Delete as { Objects: { Key: string }[] }).Objects.length,
-			),
-		).toEqual([1000, 1000, 500]);
+		expect(calls.map((x) => (x.input.Delete as { Objects: { Key: string }[] }).Objects.length)).toEqual([
+			1000, 1000, 500,
+		]);
 		expect(result.completed).toHaveLength(2500);
 		expect(result.remaining).toEqual([]);
 	});
@@ -347,9 +302,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			const stub = client(async (c) => {
 				if (c.constructor.name !== "DeleteObjectsCommand") return {};
 				n++;
-				const requested = (
-					c.input.Delete as { Objects: { Key: string }[] }
-				).Objects.map((x) => x.Key);
+				const requested = (c.input.Delete as { Objects: { Key: string }[] }).Objects.map((x) => x.Key);
 				if (n === 1) return { Deleted: requested.map((Key) => ({ Key })) };
 				if (failure === "throw")
 					throw Object.assign(new Error("unavailable"), {
@@ -363,16 +316,8 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			const keys = Array.from({ length: 2001 }, (_, i) => `k${i}`);
 			const report = await deleteKeys(stub, "b", keys);
 			expect(n).toBe(2);
-			expect(report.completed).toEqual(
-				failure === "errors"
-					? [...keys.slice(0, 1000), "k1000"]
-					: keys.slice(0, 1000),
-			);
-			expect(report.remaining).toEqual(
-				failure === "errors"
-					? [...keys.slice(1001, 2000), "k2000"]
-					: keys.slice(1000),
-			);
+			expect(report.completed).toEqual(failure === "errors" ? [...keys.slice(0, 1000), "k1000"] : keys.slice(0, 1000));
+			expect(report.remaining).toEqual(failure === "errors" ? [...keys.slice(1001, 2000), "k2000"] : keys.slice(1000));
 			expect(report.error?.code).toBe("ACCESS_DENIED");
 		}
 	});
@@ -382,8 +327,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			const stub = client(async (c) => {
 				commands.push(c.constructor.name);
 				if (c.constructor.name === "ListObjectsV2Command") {
-					if (mode === "error")
-						throw Object.assign(new Error("bad"), { name: "AccessDenied" });
+					if (mode === "error") throw Object.assign(new Error("bad"), { name: "AccessDenied" });
 					return { Contents: [], IsTruncated: false };
 				}
 				return { Deleted: [] };
@@ -416,20 +360,14 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 					: { Contents: [{ Key: "p/b", Size: 1 }], IsTruncated: false };
 			}
 			return {
-				Deleted: (command.input.Delete as { Objects: { Key: string }[] }).Objects.map(
-					(item) => ({ Key: item.Key }),
-				),
+				Deleted: (command.input.Delete as { Objects: { Key: string }[] }).Objects.map((item) => ({ Key: item.Key })),
 			};
 		});
 		await expect(deletePrefix(stub, "b", "p/")).resolves.toEqual({
 			completed: ["p/a", "p/b"],
 			remaining: [],
 		});
-		expect(commands).toEqual([
-			"ListObjectsV2Command",
-			"ListObjectsV2Command",
-			"DeleteObjectsCommand",
-		]);
+		expect(commands).toEqual(["ListObjectsV2Command", "ListObjectsV2Command", "DeleteObjectsCommand"]);
 	});
 	it("counts keys across pages and creates a zero-byte folder marker", async () => {
 		let page = 0;
@@ -463,7 +401,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 		for (const failure of failures) {
 			const calls: string[] = [];
 			const stub = client(async (c) => {
-				calls.push(c.constructor.name + ":" + String(c.input.Key));
+				calls.push(`${c.constructor.name}:${String(c.input.Key)}`);
 				if (c.constructor.name === "HeadObjectCommand") {
 					if (c.input.Key === "dst") {
 						if (failure === "forbidden-destination")
@@ -474,21 +412,17 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 					}
 					return { ContentLength: 1 };
 				}
-				if (c.constructor.name === "CopyObjectCommand")
-					return { CopyObjectResult: { ETag: "etag" } };
+				if (c.constructor.name === "CopyObjectCommand") return { CopyObjectResult: { ETag: "etag" } };
 				if (c.constructor.name === "DeleteObjectCommand")
 					throw Object.assign(new Error("delete fail"), {
 						name: "AccessDenied",
 					});
 				return {};
 			});
-			await expect(renameObject(stub, "b", "src", "dst")).rejects.toMatchObject(
-				{ code: failure === "delete" ? "ACCESS_DENIED" : "ACCESS_DENIED" },
-			);
-			if (failure === "forbidden-destination")
-				expect(calls.some((x) => x.startsWith("CopyObjectCommand"))).toBe(
-					false,
-				);
+			await expect(renameObject(stub, "b", "src", "dst")).rejects.toMatchObject({
+				code: failure === "delete" ? "ACCESS_DENIED" : "ACCESS_DENIED",
+			});
+			if (failure === "forbidden-destination") expect(calls.some((x) => x.startsWith("CopyObjectCommand"))).toBe(false);
 			else
 				expect(calls).toEqual([
 					"HeadObjectCommand:src",
@@ -512,11 +446,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			[channels.transfersCancel]: { cancelled: false },
 		};
 		for (const [channel, sample] of Object.entries(responseSamples)) {
-			expect(
-				responseSchemas[channel as keyof typeof responseSchemas].safeParse(
-					sample,
-				).success,
-			).toBe(true);
+			expect(responseSchemas[channel as keyof typeof responseSchemas].safeParse(sample).success).toBe(true);
 			expect(
 				responseSchemas[channel as keyof typeof responseSchemas].safeParse({
 					...(sample as Record<string, unknown>),
@@ -544,10 +474,7 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			[events.transferDone]: { transferId: "id-12345678", status: "completed" },
 		};
 		for (const [channel, sample] of Object.entries(eventSamples)) {
-			expect(
-				eventSchemas[channel as keyof typeof eventSchemas].safeParse(sample)
-					.success,
-			).toBe(true);
+			expect(eventSchemas[channel as keyof typeof eventSchemas].safeParse(sample).success).toBe(true);
 			expect(
 				eventSchemas[channel as keyof typeof eventSchemas].safeParse({
 					...(sample as Record<string, unknown>),
@@ -611,8 +538,6 @@ describe("Phase 4 contract A schemas and pure helpers", () => {
 			[channels.transfersCancel]: { transferId: "id-12345678" },
 		};
 		for (const [channel, sample] of Object.entries(requestSamples))
-			expect(
-				schemas[channel as keyof typeof schemas].safeParse(sample).success,
-			).toBe(true);
+			expect(schemas[channel as keyof typeof schemas].safeParse(sample).success).toBe(true);
 	});
 });

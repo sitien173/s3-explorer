@@ -4,11 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const electronMocks = vi.hoisted(() => {
 	const eventHandlers = new Map<
 		string,
-		(event: {
-			preventDefault: ReturnType<typeof vi.fn>;
-			url?: string;
-			isMainFrame?: boolean;
-		}) => void
+		(event: { preventDefault: ReturnType<typeof vi.fn>; url?: string; isMainFrame?: boolean }) => void
 	>();
 	const session = {
 		setPermissionRequestHandler: vi.fn(),
@@ -16,36 +12,80 @@ const electronMocks = vi.hoisted(() => {
 		webRequest: { onHeadersReceived: vi.fn() },
 	};
 	const windowOpen = {
-		handler: undefined as
-			| ((details: { url: string }) => { action: "deny" })
-			| undefined,
+		handler: undefined as ((details: { url: string }) => { action: "deny" }) | undefined,
 	};
 	const webContents = {
 		on: vi.fn(
 			(
 				event: string,
-				handler: (event: {
-					preventDefault: ReturnType<typeof vi.fn>;
-					url?: string;
-					isMainFrame?: boolean;
-				}) => void,
+				handler: (event: { preventDefault: ReturnType<typeof vi.fn>; url?: string; isMainFrame?: boolean }) => void,
 			) => eventHandlers.set(event, handler),
 		),
-		setWindowOpenHandler: vi.fn(
-			(handler: (details: { url: string }) => { action: "deny" }) => {
-				windowOpen.handler = handler;
-			},
-		),
+		setWindowOpenHandler: vi.fn((handler: (details: { url: string }) => { action: "deny" }) => {
+			windowOpen.handler = handler;
+		}),
 		session,
 	};
-	const window = { webContents, loadURL: vi.fn(), loadFile: vi.fn() };
+	const windowListeners = new Map<string, Set<() => void>>();
+	const window = {
+		webContents,
+		loadURL: vi.fn(),
+		loadFile: vi.fn(),
+		setBackgroundColor: vi.fn(),
+		setTitleBarOverlay: vi.fn(),
+		on: vi.fn((event: string, handler: () => void) => {
+			let set = windowListeners.get(event);
+			if (!set) {
+				set = new Set();
+				windowListeners.set(event, set);
+			}
+			set.add(handler);
+			return window;
+		}),
+		emit: (event: string) => {
+			const listeners = windowListeners.get(event);
+			if (listeners) {
+				for (const handler of Array.from(listeners)) {
+					handler();
+				}
+			}
+		},
+	};
+	const nativeThemeListeners = new Map<string, Set<() => void>>();
+	const nativeTheme = {
+		shouldUseDarkColors: false,
+		on: vi.fn((event: string, handler: () => void) => {
+			let set = nativeThemeListeners.get(event);
+			if (!set) {
+				set = new Set();
+				nativeThemeListeners.set(event, set);
+			}
+			set.add(handler);
+			return nativeTheme;
+		}),
+		removeListener: vi.fn((event: string, handler: () => void) => {
+			nativeThemeListeners.get(event)?.delete(handler);
+			return nativeTheme;
+		}),
+		emit: (event: string) => {
+			const listeners = nativeThemeListeners.get(event);
+			if (listeners) {
+				for (const handler of Array.from(listeners)) {
+					handler();
+				}
+			}
+		},
+	};
 	return {
 		eventHandlers,
 		session,
 		windowOpen,
 		webContents,
 		window,
-		BrowserWindow: vi.fn(function BrowserWindowMock() {
+		windowListeners,
+		nativeTheme,
+		nativeThemeListeners,
+		BrowserWindow: vi.fn(function createBrowserWindow() {
 			return window;
 		}),
 		openExternal: vi.fn(() => Promise.resolve()),
@@ -54,6 +94,7 @@ const electronMocks = vi.hoisted(() => {
 
 vi.mock("electron", () => ({
 	BrowserWindow: electronMocks.BrowserWindow,
+	nativeTheme: electronMocks.nativeTheme,
 	shell: { openExternal: electronMocks.openExternal },
 }));
 
@@ -68,7 +109,96 @@ import {
 	responseCspFor,
 	SANDBOX_CSP,
 	toExternalHttpsUrl,
+	TOOLBAR_HEIGHT,
 } from "../../src/main/window";
+
+describe("window chrome and theme options", () => {
+	const originalPlatform = process.platform;
+
+	beforeEach(() => {
+		electronMocks.nativeThemeListeners.clear();
+		electronMocks.windowListeners.clear();
+		electronMocks.nativeTheme.shouldUseDarkColors = false;
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => {
+		Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+	});
+
+	it("hides titleBarStyle across platforms", () => {
+		const options = buildWindowOptions();
+		expect(options.titleBarStyle).toBe("hidden");
+	});
+
+	it("includes titleBarOverlay on Linux with toolbar height and theme colors", () => {
+		Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+		electronMocks.nativeTheme.shouldUseDarkColors = false;
+		const lightOptions = buildWindowOptions();
+		expect(lightOptions.titleBarOverlay).toEqual({
+			color: "#ffffff",
+			symbolColor: "#1d1d1f",
+			height: TOOLBAR_HEIGHT,
+		});
+
+		electronMocks.nativeTheme.shouldUseDarkColors = true;
+		const darkOptions = buildWindowOptions();
+		expect(darkOptions.titleBarOverlay).toEqual({
+			color: "#1c1c1e",
+			symbolColor: "#f5f5f7",
+			height: TOOLBAR_HEIGHT,
+		});
+	});
+
+	it("omits titleBarOverlay on macOS (darwin)", () => {
+		Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+		const options = buildWindowOptions();
+		expect(options.titleBarOverlay).toBeUndefined();
+	});
+
+	it("sets backgroundColor matching light and dark themes", () => {
+		electronMocks.nativeTheme.shouldUseDarkColors = false;
+		expect(buildWindowOptions().backgroundColor).toBe("#ffffff");
+
+		electronMocks.nativeTheme.shouldUseDarkColors = true;
+		expect(buildWindowOptions().backgroundColor).toBe("#1c1c1e");
+	});
+
+	it("updates overlay and background on nativeTheme updated event, omitting overlay update on macOS", () => {
+		Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+		createWindow();
+		expect(electronMocks.nativeTheme.on).toHaveBeenCalledWith("updated", expect.any(Function));
+
+		electronMocks.nativeTheme.shouldUseDarkColors = true;
+		electronMocks.nativeTheme.emit("updated");
+
+		expect(electronMocks.window.setBackgroundColor).toHaveBeenCalledWith("#1c1c1e");
+		expect(electronMocks.window.setTitleBarOverlay).toHaveBeenCalledWith({
+			color: "#1c1c1e",
+			symbolColor: "#f5f5f7",
+			height: TOOLBAR_HEIGHT,
+		});
+
+		Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+		electronMocks.window.setTitleBarOverlay.mockClear();
+		electronMocks.window.setBackgroundColor.mockClear();
+
+		electronMocks.nativeTheme.shouldUseDarkColors = false;
+		electronMocks.nativeTheme.emit("updated");
+
+		expect(electronMocks.window.setBackgroundColor).toHaveBeenCalledWith("#ffffff");
+		expect(electronMocks.window.setTitleBarOverlay).not.toHaveBeenCalled();
+	});
+
+	it("removes the nativeTheme updated listener on window closed event", () => {
+		createWindow();
+		expect(electronMocks.nativeThemeListeners.get("updated")?.size).toBe(1);
+
+		electronMocks.window.emit("closed");
+		expect(electronMocks.nativeTheme.removeListener).toHaveBeenCalledWith("updated", expect.any(Function));
+		expect(electronMocks.nativeThemeListeners.get("updated")?.size).toBe(0);
+	});
+});
 
 describe("secure BrowserWindow defaults", () => {
 	it("enables sandbox and context isolation and disables Node integration", () => {
@@ -79,13 +209,8 @@ describe("secure BrowserWindow defaults", () => {
 	});
 
 	it("keeps the renderer meta CSP identical to the production CSP", () => {
-		const html = readFileSync(
-			new URL("../../src/renderer/index.html", import.meta.url),
-			"utf8",
-		);
-		const match = html.match(
-			/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/,
-		);
+		const html = readFileSync(new URL("../../src/renderer/index.html", import.meta.url), "utf8");
+		const match = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/);
 		expect(match?.[1]).toBe(CSP);
 		expect(CSP).toContain("style-src 'self' 'unsafe-inline'");
 		expect(CSP).toContain("script-src 'self'");
@@ -147,19 +272,11 @@ describe("allowFrameNavigation", () => {
 	});
 
 	it("denies another port", () => {
-		expect(
-			allowFrameNavigation(
-				"http://127.0.0.1:9999/document.pdf",
-				false,
-				proxyOrigin,
-			),
-		).toBe(false);
+		expect(allowFrameNavigation("http://127.0.0.1:9999/document.pdf", false, proxyOrigin)).toBe(false);
 	});
 
 	it("denies about:blank", () => {
-		expect(
-			allowFrameNavigation("about:blank", false, proxyOrigin),
-		).toBe(false);
+		expect(allowFrameNavigation("about:blank", false, proxyOrigin)).toBe(false);
 	});
 
 	it("denies undefined proxyOrigin", () => {
@@ -167,18 +284,10 @@ describe("allowFrameNavigation", () => {
 	});
 
 	it("denies data, file, and malformed URLs", () => {
-		expect(
-			allowFrameNavigation("data:text/html,test", false, proxyOrigin),
-		).toBe(false);
-		expect(
-			allowFrameNavigation("file:///etc/passwd", false, proxyOrigin),
-		).toBe(false);
-		expect(
-			allowFrameNavigation("not-a-valid-url", false, proxyOrigin),
-		).toBe(false);
-		expect(
-			allowFrameNavigation(undefined, false, proxyOrigin),
-		).toBe(false);
+		expect(allowFrameNavigation("data:text/html,test", false, proxyOrigin)).toBe(false);
+		expect(allowFrameNavigation("file:///etc/passwd", false, proxyOrigin)).toBe(false);
+		expect(allowFrameNavigation("not-a-valid-url", false, proxyOrigin)).toBe(false);
+		expect(allowFrameNavigation(undefined, false, proxyOrigin)).toBe(false);
 	});
 
 	it("verifies Node URL origin behavior for chrome-extension URLs", () => {
@@ -190,40 +299,16 @@ describe("allowFrameNavigation", () => {
 	});
 
 	it("allows subframe navigation to the PDF viewer", () => {
-		expect(
-			allowFrameNavigation(
-				`${PDF_VIEWER_ORIGIN}/uuid`,
-				false,
-				proxyOrigin,
-			),
-		).toBe(true);
-		expect(
-			allowFrameNavigation(
-				`${PDF_VIEWER_ORIGIN}/uuid`,
-				false,
-				undefined,
-			),
-		).toBe(true);
+		expect(allowFrameNavigation(`${PDF_VIEWER_ORIGIN}/uuid`, false, proxyOrigin)).toBe(true);
+		expect(allowFrameNavigation(`${PDF_VIEWER_ORIGIN}/uuid`, false, undefined)).toBe(true);
 	});
 
 	it("denies main-frame navigation to the PDF viewer", () => {
-		expect(
-			allowFrameNavigation(
-				`${PDF_VIEWER_ORIGIN}/uuid`,
-				true,
-				proxyOrigin,
-			),
-		).toBe(false);
+		expect(allowFrameNavigation(`${PDF_VIEWER_ORIGIN}/uuid`, true, proxyOrigin)).toBe(false);
 	});
 
 	it("denies navigation to another chrome-extension id", () => {
-		expect(
-			allowFrameNavigation(
-				"chrome-extension://abcdefghijklmno/uuid",
-				false,
-				proxyOrigin,
-			),
-		).toBe(false);
+		expect(allowFrameNavigation("chrome-extension://abcdefghijklmno/uuid", false, proxyOrigin)).toBe(false);
 	});
 });
 
@@ -429,19 +514,11 @@ describe("window runtime security controls", () => {
 
 	it("blocks navigation, redirects, and webview attachment", () => {
 		createWindow();
-		const events = [
-			"will-navigate",
-			"will-frame-navigate",
-			"will-redirect",
-			"will-attach-webview",
-		];
+		const events = ["will-navigate", "will-frame-navigate", "will-redirect", "will-attach-webview"];
 		for (const eventName of events) {
 			const preventDefault = vi.fn();
 			electronMocks.eventHandlers.get(eventName)?.({ preventDefault });
-			expect(
-				preventDefault,
-				`${eventName} should be blocked`,
-			).toHaveBeenCalledOnce();
+			expect(preventDefault, `${eventName} should be blocked`).toHaveBeenCalledOnce();
 		}
 	});
 
@@ -503,8 +580,7 @@ describe("window runtime security controls", () => {
 	it("passes PDF subframe response headers through without app CSP", () => {
 		const proxyOrigin = "http://127.0.0.1:43210";
 		createWindow({ proxyOrigin });
-		const onHeaders =
-			electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
+		const onHeaders = electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
 		const callback = vi.fn();
 		const originalHeaders = {
 			"content-type": ["application/pdf"],
@@ -521,18 +597,13 @@ describe("window runtime security controls", () => {
 		expect(callback).toHaveBeenCalledWith({
 			responseHeaders: originalHeaders,
 		});
-		expect(
-			callback.mock.calls[0]?.[0].responseHeaders[
-				"Content-Security-Policy"
-			],
-		).toBeUndefined();
+		expect(callback.mock.calls[0]?.[0].responseHeaders["Content-Security-Policy"]).toBeUndefined();
 	});
 
 	it("applies sandbox CSP to non-PDF subframe responses", () => {
 		const proxyOrigin = "http://127.0.0.1:43210";
 		createWindow({ proxyOrigin });
-		const onHeaders =
-			electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
+		const onHeaders = electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
 		const callback = vi.fn();
 		onHeaders?.(
 			{
@@ -544,18 +615,13 @@ describe("window runtime security controls", () => {
 			},
 			callback,
 		);
-		expect(
-			callback.mock.calls[0]?.[0].responseHeaders[
-				"Content-Security-Policy"
-			],
-		).toEqual([SANDBOX_CSP]);
+		expect(callback.mock.calls[0]?.[0].responseHeaders["Content-Security-Policy"]).toEqual([SANDBOX_CSP]);
 	});
 
 	it("passes PDF viewer responses through without app CSP", () => {
 		const proxyOrigin = "http://127.0.0.1:43210";
 		createWindow({ proxyOrigin });
-		const onHeaders =
-			electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
+		const onHeaders = electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
 		const callback = vi.fn();
 		const viewerHeaders = {
 			"content-type": ["application/javascript"],
@@ -572,11 +638,7 @@ describe("window runtime security controls", () => {
 		expect(callback).toHaveBeenCalledWith({
 			responseHeaders: viewerHeaders,
 		});
-		expect(
-			callback.mock.calls[0]?.[0].responseHeaders[
-				"Content-Security-Policy"
-			],
-		).toBeUndefined();
+		expect(callback.mock.calls[0]?.[0].responseHeaders["Content-Security-Policy"]).toBeUndefined();
 	});
 
 	it("denies every new window and opens normalized HTTPS URLs only", () => {
@@ -588,9 +650,7 @@ describe("window runtime security controls", () => {
 		];
 		for (const [url, normalized] of allowed) {
 			expect(handler({ url })).toEqual({ action: "deny" });
-			expect(electronMocks.openExternal).toHaveBeenLastCalledWith(
-				normalized,
-			);
+			expect(electronMocks.openExternal).toHaveBeenLastCalledWith(normalized);
 		}
 		const rejected = [
 			"http://example.com",
@@ -625,9 +685,7 @@ describe("window runtime security controls", () => {
 
 	it("handles a rejected external-open promise without an unhandled rejection", async () => {
 		createWindow();
-		electronMocks.openExternal.mockRejectedValueOnce(
-			new Error("external handler failed"),
-		);
+		electronMocks.openExternal.mockRejectedValueOnce(new Error("external handler failed"));
 		const unhandled = vi.fn();
 		process.on("unhandledRejection", unhandled);
 		try {
@@ -635,9 +693,7 @@ describe("window runtime security controls", () => {
 				url: "https://example.com/a",
 			});
 			await new Promise((resolve) => setImmediate(resolve));
-			expect(electronMocks.openExternal).toHaveBeenCalledWith(
-				"https://example.com/a",
-			);
+			expect(electronMocks.openExternal).toHaveBeenCalledWith("https://example.com/a");
 			expect(unhandled).not.toHaveBeenCalled();
 		} finally {
 			process.off("unhandledRejection", unhandled);
@@ -646,52 +702,33 @@ describe("window runtime security controls", () => {
 
 	it("denies all permission requests and checks", () => {
 		createWindow();
-		const requestHandler =
-			electronMocks.session.setPermissionRequestHandler.mock.calls[0]?.[0];
+		const requestHandler = electronMocks.session.setPermissionRequestHandler.mock.calls[0]?.[0];
 		const callback = vi.fn();
 		requestHandler?.({}, "fullscreen", callback);
 		expect(callback).toHaveBeenCalledWith(false);
-		const checkHandler =
-			electronMocks.session.setPermissionCheckHandler.mock.calls[0]?.[0];
+		const checkHandler = electronMocks.session.setPermissionCheckHandler.mock.calls[0]?.[0];
 		expect(checkHandler?.({}, "fullscreen")).toBe(false);
 	});
 
-	it.each([false, true])(
-		"sets %s CSP in response headers when dev URL presence is %s",
-		(dev) => {
-			if (dev) {
-				process.env.ELECTRON_RENDERER_URL = "http://localhost:5173";
-			}
-			createWindow();
-			const onHeaders =
-				electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
-			const callback = vi.fn();
-			onHeaders?.(
-				{ responseHeaders: { "X-Test": ["preserved"] } },
-				callback,
-			);
-			expect(
-				callback.mock.calls[0]?.[0].responseHeaders[
-					"Content-Security-Policy"
-				],
-			).toEqual([buildCsp({ dev })]);
-		},
-	);
+	it.each([false, true])("sets %s CSP in response headers when dev URL presence is %s", (dev) => {
+		if (dev) {
+			process.env.ELECTRON_RENDERER_URL = "http://localhost:5173";
+		}
+		createWindow();
+		const onHeaders = electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
+		const callback = vi.fn();
+		onHeaders?.({ responseHeaders: { "X-Test": ["preserved"] } }, callback);
+		expect(callback.mock.calls[0]?.[0].responseHeaders["Content-Security-Policy"]).toEqual([buildCsp({ dev })]);
+	});
 
 	it("sets an exact proxy origin in the enforced response header", () => {
 		const proxyOrigin = "http://127.0.0.1:43210";
-		const createWindowWithOptions = createWindow as (options?: {
-			proxyOrigin?: string;
-		}) => unknown;
+		const createWindowWithOptions = createWindow as (options?: { proxyOrigin?: string }) => unknown;
 		createWindowWithOptions({ proxyOrigin });
-		const onHeaders =
-			electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
+		const onHeaders = electronMocks.session.webRequest.onHeadersReceived.mock.calls[0]?.[0];
 		const callback = vi.fn();
 		onHeaders?.({ responseHeaders: {} }, callback);
-		const policy =
-			callback.mock.calls[0]?.[0].responseHeaders[
-				"Content-Security-Policy"
-			]?.[0];
+		const policy = callback.mock.calls[0]?.[0].responseHeaders["Content-Security-Policy"]?.[0];
 		expect(policy).toContain(proxyOrigin);
 		expect(policy).not.toContain("http://127.0.0.1:*");
 	});

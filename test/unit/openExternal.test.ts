@@ -45,9 +45,7 @@ describe("openExternal", () => {
 		const longUnicode = `${"文".repeat(80)}.pdf`;
 		const sanitizedUnicode = sanitizeFileName(longUnicode);
 		expect(sanitizedUnicode.endsWith(".pdf")).toBe(true);
-		expect(
-			Buffer.byteLength(sanitizedUnicode, "utf-8"),
-		).toBeLessThanOrEqual(200);
+		expect(Buffer.byteLength(sanitizedUnicode, "utf-8")).toBeLessThanOrEqual(200);
 		// Each '文' is 3 bytes; 196 bytes available for base / 3 = 65 chars = 195 bytes + 4 bytes (.pdf) = 199 bytes
 		expect(Buffer.byteLength(sanitizedUnicode, "utf-8")).toBe(199);
 
@@ -101,9 +99,7 @@ describe("openExternal", () => {
 				fetch: vi.fn().mockResolvedValue({
 					ok: true,
 					status: 200,
-					body: Readable.toWeb(
-						Readable.from([Buffer.from("sample-data")]),
-					),
+					body: Readable.toWeb(Readable.from([Buffer.from("sample-data")])),
 				}) as unknown as typeof fetch,
 				tempRoot: testTempRoot,
 				openPath: vi.fn().mockImplementation(async (filePath: string) => {
@@ -130,18 +126,12 @@ describe("openExternal", () => {
 	});
 
 	it("streams response body to file and calls openPath", async () => {
-		const chunks = [
-			Buffer.from("chunk-1-"),
-			Buffer.from("chunk-2-"),
-			Buffer.from("chunk-3"),
-		];
+		const chunks = [Buffer.from("chunk-1-"), Buffer.from("chunk-2-"), Buffer.from("chunk-3")];
 		let openedFilePath = "";
-		const openPathMock = vi
-			.fn()
-			.mockImplementation(async (filePath: string) => {
-				openedFilePath = filePath;
-				return "";
-			});
+		const openPathMock = vi.fn().mockImplementation(async (filePath: string) => {
+			openedFilePath = filePath;
+			return "";
+		});
 
 		const deps: OpenExternalDeps = {
 			proxyOrigin: () => proxyOrigin,
@@ -188,10 +178,7 @@ describe("openExternal", () => {
 
 		let thrownError: (Error & { code?: string }) | null = null;
 		try {
-			await openWithSystemApp(
-				{ url: targetUrl, fileName: "test.dat" },
-				deps,
-			);
+			await openWithSystemApp({ url: targetUrl, fileName: "test.dat" }, deps);
 		} catch (err) {
 			thrownError = err as Error & { code?: string };
 		}
@@ -221,10 +208,7 @@ describe("openExternal", () => {
 
 		let thrownError: (Error & { code?: string }) | null = null;
 		try {
-			await openWithSystemApp(
-				{ url: `${proxyOrigin}/o/sample`, fileName: "doc.pdf" },
-				deps,
-			);
+			await openWithSystemApp({ url: `${proxyOrigin}/o/sample`, fileName: "doc.pdf" }, deps);
 		} catch (err) {
 			thrownError = err as Error & { code?: string };
 		}
@@ -255,9 +239,7 @@ describe("openExternal", () => {
 				async pull(controller) {
 					await vi.advanceTimersByTimeAsync(35000);
 					if (capturedSignal?.aborted) {
-						controller.error(
-							new DOMException("aborted", "AbortError"),
-						);
+						controller.error(new DOMException("aborted", "AbortError"));
 						return;
 					}
 					controller.enqueue(Buffer.from("slow-chunk-2"));
@@ -279,10 +261,7 @@ describe("openExternal", () => {
 				openPath: openPathMock,
 			};
 
-			const result = await openWithSystemApp(
-				{ url: `${proxyOrigin}/o/large-file`, fileName: "large.dat" },
-				deps,
-			);
+			const result = await openWithSystemApp({ url: `${proxyOrigin}/o/large-file`, fileName: "large.dat" }, deps);
 
 			expect(result).toEqual({ opened: true });
 			expect(openPathMock).toHaveBeenCalledWith(openedPath);
@@ -299,20 +278,18 @@ describe("openExternal", () => {
 		try {
 			const openPathMock = vi.fn();
 			let abortListener: (() => void) | null = null;
-			const fetchMock = vi
-				.fn()
-				.mockImplementation((_url: string, init?: RequestInit) => {
-					return new Promise((_resolve, reject) => {
-						if (init?.signal) {
-							abortListener = () => {
-								const abortErr = new Error("This operation was aborted");
-								abortErr.name = "AbortError";
-								reject(abortErr);
-							};
-							init.signal.addEventListener("abort", abortListener);
-						}
-					});
+			const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+				return new Promise((_resolve, reject) => {
+					if (init?.signal) {
+						abortListener = () => {
+							const abortErr = new Error("This operation was aborted");
+							abortErr.name = "AbortError";
+							reject(abortErr);
+						};
+						init.signal.addEventListener("abort", abortListener);
+					}
 				});
+			});
 
 			const deps: OpenExternalDeps = {
 				proxyOrigin: () => proxyOrigin,
@@ -321,10 +298,7 @@ describe("openExternal", () => {
 				openPath: openPathMock,
 			};
 
-			const promise = openWithSystemApp(
-				{ url: `${proxyOrigin}/o/hung`, fileName: "timeout.dat" },
-				deps,
-			);
+			const promise = openWithSystemApp({ url: `${proxyOrigin}/o/hung`, fileName: "timeout.dat" }, deps);
 
 			await vi.waitUntil(() => fetchMock.mock.calls.length > 0);
 			await vi.advanceTimersByTimeAsync(31000);
@@ -342,16 +316,10 @@ describe("openExternal", () => {
 	});
 
 	it("integrates with register and handles IPC channel invocation", async () => {
-		const handlers = new Map<
-			string,
-			(event: unknown, input: unknown) => Promise<unknown>
-		>();
+		const handlers = new Map<string, (event: unknown, input: unknown) => Promise<unknown>>();
 		const ipcMain: IpcMainLike = {
 			handle: (channel, listener) =>
-				handlers.set(
-					channel,
-					listener as (event: unknown, input: unknown) => Promise<unknown>,
-				),
+				handlers.set(channel, listener as (event: unknown, input: unknown) => Promise<unknown>),
 		};
 
 		const openExternalDeps: OpenExternalDeps = {
@@ -400,16 +368,10 @@ describe("openExternal", () => {
 			data: { opened: true },
 		});
 
-		const handlersWithoutDeps = new Map<
-			string,
-			(event: unknown, input: unknown) => Promise<unknown>
-		>();
+		const handlersWithoutDeps = new Map<string, (event: unknown, input: unknown) => Promise<unknown>>();
 		const ipcMainWithoutDeps: IpcMainLike = {
 			handle: (channel, listener) =>
-				handlersWithoutDeps.set(
-					channel,
-					listener as (event: unknown, input: unknown) => Promise<unknown>,
-				),
+				handlersWithoutDeps.set(channel, listener as (event: unknown, input: unknown) => Promise<unknown>),
 		};
 		register(ipcMainWithoutDeps, {
 			store: {
@@ -427,9 +389,7 @@ describe("openExternal", () => {
 			} as any,
 		});
 
-		const handlerWithoutDeps = handlersWithoutDeps.get(
-			channels.filesOpenWithSystemApp,
-		);
+		const handlerWithoutDeps = handlersWithoutDeps.get(channels.filesOpenWithSystemApp);
 		expect(handlerWithoutDeps).toBeDefined();
 
 		const failedRes = await handlerWithoutDeps!(
@@ -446,9 +406,25 @@ describe("openExternal", () => {
 	});
 
 	it.each([
-		"desktop", "sh", "bash", "zsh", "run", "bin", "appimage", "jar",
-		"py", "pl", "rb", "exe", "msi", "deb", "rpm", "command",
-		"SH", "Py", "EXE",
+		"desktop",
+		"sh",
+		"bash",
+		"zsh",
+		"run",
+		"bin",
+		"appimage",
+		"jar",
+		"py",
+		"pl",
+		"rb",
+		"exe",
+		"msi",
+		"deb",
+		"rpm",
+		"command",
+		"SH",
+		"Py",
+		"EXE",
 	])("refuses opening blocked extension .%s", async (ext) => {
 		const deps: OpenExternalDeps = {
 			proxyOrigin: () => proxyOrigin,
@@ -457,10 +433,7 @@ describe("openExternal", () => {
 			openPath: vi.fn(),
 		};
 		await expect(
-			openWithSystemApp(
-				{ url: `${proxyOrigin}/o/file`, fileName: `payload.${ext}` },
-				deps,
-			),
+			openWithSystemApp({ url: `${proxyOrigin}/o/file`, fileName: `payload.${ext}` }, deps),
 		).rejects.toMatchObject({
 			code: "REQUEST_FAILED",
 			message: "This file type cannot be opened",
@@ -484,10 +457,7 @@ describe("openExternal", () => {
 				return "";
 			}),
 		};
-		await openWithSystemApp(
-			{ url: `${proxyOrigin}/o/file-1`, fileName: "document.txt" },
-			deps,
-		);
+		await openWithSystemApp({ url: `${proxyOrigin}/o/file-1`, fileName: "document.txt" }, deps);
 		expect(existsSync(openedFilePath)).toBe(true);
 		const [tempDir] = await readdir(testTempRoot);
 		expect(tempDir).toBeDefined();

@@ -33,7 +33,7 @@ export class S3ClientFactory {
 	private clients = new Map<string, CachedClient>();
 
 	constructor(
-		private store: ConnectionStore,
+		_store: ConnectionStore,
 		private vault: SecretVault,
 	) {}
 
@@ -53,9 +53,7 @@ export class S3ClientFactory {
 			if (connection.endpoint) {
 				config.endpoint = connection.endpoint;
 			} else {
-				const profileEndpoint = await getProfileEndpointUrl(
-					connection.profile ?? "",
-				);
+				const profileEndpoint = await getProfileEndpointUrl(connection.profile ?? "");
 				if (profileEndpoint) config.endpoint = profileEndpoint;
 				else config.ignoreConfiguredEndpointUrls = true;
 			}
@@ -64,9 +62,7 @@ export class S3ClientFactory {
 			config.credentials = manualCredentialsProvider(this.vault, connection.id);
 		}
 
-		const client = new S3Client(
-			config as NonNullable<ConstructorParameters<typeof S3Client>[0]>,
-		);
+		const client = new S3Client(config as NonNullable<ConstructorParameters<typeof S3Client>[0]>);
 		this.clients.set(key, { client, connectionId: connection.id });
 		return client;
 	}

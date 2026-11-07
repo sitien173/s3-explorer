@@ -19,10 +19,7 @@ export function isPresignedUrl(urlStr: string): boolean {
 		if (parsed.searchParams.has("X-Amz-Signature")) {
 			return true;
 		}
-		if (
-			parsed.searchParams.has("Signature") &&
-			parsed.searchParams.has("Expires")
-		) {
+		if (parsed.searchParams.has("Signature") && parsed.searchParams.has("Expires")) {
 			return true;
 		}
 	} catch {
@@ -48,10 +45,7 @@ function extractEndpointHost(endpointStr?: string): string | null {
 	}
 }
 
-export function extractBucketFromUrl(
-	urlStr: string,
-	endpointHosts: string[] = [],
-): string | null {
+export function extractBucketFromUrl(urlStr: string, endpointHosts: string[] = []): string | null {
 	const trimmed = urlStr.trim();
 	if (!trimmed) {
 		return null;
@@ -60,8 +54,7 @@ export function extractBucketFromUrl(
 	if (trimmed.startsWith("s3://")) {
 		const withoutScheme = trimmed.slice(5);
 		const slashIndex = withoutScheme.indexOf("/");
-		const bucket =
-			slashIndex >= 0 ? withoutScheme.slice(0, slashIndex) : withoutScheme;
+		const bucket = slashIndex >= 0 ? withoutScheme.slice(0, slashIndex) : withoutScheme;
 		return bucket.length > 0 ? bucket : null;
 	}
 
@@ -72,17 +65,13 @@ export function extractBucketFromUrl(
 		const pathSegments = parsed.pathname.split("/").filter(Boolean);
 
 		// AWS virtual-hosted style: <bucket>.s3.<region>.amazonaws.com or <bucket>.s3.amazonaws.com
-		const s3VirtualHostedMatch =
-			/^([a-z0-9][a-z0-9.-]{1,62})\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/.exec(
-				hostname,
-			);
-		if (s3VirtualHostedMatch && s3VirtualHostedMatch[1]) {
+		const s3VirtualHostedMatch = /^([a-z0-9][a-z0-9.-]{1,62})\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/.exec(hostname);
+		if (s3VirtualHostedMatch?.[1]) {
 			return s3VirtualHostedMatch[1];
 		}
 
 		// AWS path style: s3.<region>.amazonaws.com/<bucket>/... or s3.amazonaws.com/<bucket>/...
-		const s3PathMatch =
-			/^s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/.test(hostname);
+		const s3PathMatch = /^s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/.test(hostname);
 		if (s3PathMatch && pathSegments.length > 0) {
 			return pathSegments[0]!;
 		}
@@ -103,9 +92,7 @@ export function extractBucketFromUrl(
 	}
 }
 
-export function chooseDefaultConnection(
-	input: DefaultChoiceInput,
-): string | "anonymous" {
+export function chooseDefaultConnection(input: DefaultChoiceInput): string | "anonymous" {
 	const { url, connections, selectedConnectionId, currentBucketList } = input;
 
 	if (isPresignedUrl(url)) {
@@ -121,16 +108,10 @@ export function chooseDefaultConnection(
 	if (extractedBucket) {
 		// 1. Connection that lists or pins that bucket
 		const matchingConn = connections.find((conn) => {
-			if (
-				conn.pinnedBuckets.includes(extractedBucket) ||
-				conn.extraBuckets.includes(extractedBucket)
-			) {
+			if (conn.pinnedBuckets.includes(extractedBucket) || conn.extraBuckets.includes(extractedBucket)) {
 				return true;
 			}
-			if (
-				conn.id === selectedConnectionId &&
-				currentBucketList?.includes(extractedBucket)
-			) {
+			if (conn.id === selectedConnectionId && currentBucketList?.includes(extractedBucket)) {
 				return true;
 			}
 			return false;

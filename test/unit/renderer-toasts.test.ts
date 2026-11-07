@@ -163,10 +163,7 @@ describe("renderer toast message builders", () => {
 	});
 
 	it("builds operation failed error toast without local path or secrets", () => {
-		const toast = buildOperationFailedToast(
-			"Delete",
-			"Access Denied on /var/log/s3/operation.log with secret key",
-		);
+		const toast = buildOperationFailedToast("Delete", "Access Denied on /var/log/s3/operation.log with secret key");
 		expect(toast.type).toBe("error");
 		const fullText = `${toast.message} ${toast.description ?? ""}`;
 		expect(fullText).toContain("Delete");
@@ -175,10 +172,7 @@ describe("renderer toast message builders", () => {
 
 	it("builds partial failure error toast with a 'View report' action", () => {
 		const onAction = vi.fn();
-		const toast = buildPartialFailureToast(
-			{ completedCount: 5, remainingCount: 2 },
-			onAction,
-		);
+		const toast = buildPartialFailureToast({ completedCount: 5, remainingCount: 2 }, onAction);
 		expect(toast.type).toBe("error");
 		expect(toast.action).toBeDefined();
 		expect(toast.action?.label).toBe("View report");

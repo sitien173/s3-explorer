@@ -6,9 +6,7 @@ export type SsoError = {
 	profile: string;
 };
 
-type SsoLoginResult =
-	| { ok: true }
-	| { ok: false; code: "CLI_MISSING" | "SSO_LOGIN_FAILED" };
+type SsoLoginResult = { ok: true } | { ok: false; code: "CLI_MISSING" | "SSO_LOGIN_FAILED" };
 
 type SsoLoginDependencies = {
 	spawn?: typeof nodeSpawn;
@@ -27,33 +25,25 @@ export function mapSsoError(error: unknown, profile: string): SsoError | null {
 	if (
 		(candidate?.name === "TokenProviderError" && missingOrExpiredToken) ||
 		(candidate?.name === "CredentialsProviderError" &&
-			(expiredSsoSession ||
-				/SSO session token.*(?:not found|invalid)/i.test(message)))
+			(expiredSsoSession || /SSO session token.*(?:not found|invalid)/i.test(message)))
 	) {
 		return { code: "SSO_LOGIN_REQUIRED", profile };
 	}
 	return null;
 }
 
-export function ssoLogin(
-	profile: string,
-	dependencies: SsoLoginDependencies = {},
-): Promise<SsoLoginResult> {
+export function ssoLogin(profile: string, dependencies: SsoLoginDependencies = {}): Promise<SsoLoginResult> {
 	return new Promise((resolve) => {
 		let child: ChildProcess;
 		try {
-			child = (dependencies.spawn ?? nodeSpawn)(
-				"aws",
-				["sso", "login", "--profile", profile],
-				{ env: dependencies.env ?? process.env, stdio: "ignore" },
-			);
+			child = (dependencies.spawn ?? nodeSpawn)("aws", ["sso", "login", "--profile", profile], {
+				env: dependencies.env ?? process.env,
+				stdio: "ignore",
+			});
 		} catch (error) {
 			resolve({
 				ok: false,
-				code:
-					(error as NodeJS.ErrnoException).code === "ENOENT"
-						? "CLI_MISSING"
-						: "SSO_LOGIN_FAILED",
+				code: (error as NodeJS.ErrnoException).code === "ENOENT" ? "CLI_MISSING" : "SSO_LOGIN_FAILED",
 			});
 			return;
 		}
@@ -64,18 +54,13 @@ export function ssoLogin(
 			settled = true;
 			resolve({
 				ok: false,
-				code:
-					(error as NodeJS.ErrnoException).code === "ENOENT"
-						? "CLI_MISSING"
-						: "SSO_LOGIN_FAILED",
+				code: (error as NodeJS.ErrnoException).code === "ENOENT" ? "CLI_MISSING" : "SSO_LOGIN_FAILED",
 			});
 		});
 		child.once("exit", (code) => {
 			if (settled) return;
 			settled = true;
-			resolve(
-				code === 0 ? { ok: true } : { ok: false, code: "SSO_LOGIN_FAILED" },
-			);
+			resolve(code === 0 ? { ok: true } : { ok: false, code: "SSO_LOGIN_FAILED" });
 		});
 	});
 }

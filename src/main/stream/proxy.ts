@@ -1,10 +1,5 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import {
-	createServer,
-	type IncomingMessage,
-	type Server,
-	type ServerResponse,
-} from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import {
@@ -31,8 +26,7 @@ type PassHeadResult = {
 };
 
 const commonHeaders = {
-	"Access-Control-Expose-Headers":
-		"Content-Length, Content-Range, Accept-Ranges, Content-Type",
+	"Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges, Content-Type",
 	"X-Content-Type-Options": "nosniff",
 	"Cache-Control": "no-store",
 };
@@ -50,10 +44,7 @@ export type StreamProxy = {
 	start(): Promise<{ origin: string }>;
 	stop(): Promise<void>;
 	urlFor(handle: string): string;
-	describe(
-		handle: string,
-		signal?: AbortSignal,
-	): Promise<StreamDescription>;
+	describe(handle: string, signal?: AbortSignal): Promise<StreamDescription>;
 };
 
 function codedError(code: string, message: string): Error & { code: string } {
@@ -66,17 +57,11 @@ function isPdfContentType(contentType: string | undefined): boolean {
 	return mime === "application/pdf";
 }
 
-function applyCspHeader(
-	response: ServerResponse,
-	contentType: string | undefined,
-): void {
+function applyCspHeader(response: ServerResponse, contentType: string | undefined): void {
 	if (isPdfContentType(contentType)) {
 		response.removeHeader("Content-Security-Policy");
 	} else {
-		response.setHeader(
-			"Content-Security-Policy",
-			"sandbox; default-src 'none'",
-		);
+		response.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
 	}
 }
 
@@ -89,12 +74,7 @@ function setCommonHeaders(response: ServerResponse, appOrigin: string): void {
 	applyCspHeader(response, undefined);
 }
 
-function sendFixed(
-	response: ServerResponse,
-	method: string,
-	status: number,
-	body: string,
-): void {
+function sendFixed(response: ServerResponse, method: string, status: number, body: string): void {
 	response.statusCode = status;
 	if (method === "HEAD") {
 		response.end();
@@ -111,18 +91,12 @@ function tokenMatches(actual: string | null, expected: string): boolean {
 	return timingSafeEqual(actualBytes, expectedBytes);
 }
 
-function requestHeader(
-	request: IncomingMessage,
-	name: string,
-): string | undefined {
+function requestHeader(request: IncomingMessage, name: string): string | undefined {
 	const value = request.headers[name];
 	return typeof value === "string" ? value : undefined;
 }
 
-function passThroughHeaders(
-	request: IncomingMessage,
-	forcedRange?: string,
-): Record<string, string> {
+function passThroughHeaders(request: IncomingMessage, forcedRange?: string): Record<string, string> {
 	const headers: Record<string, string> = {
 		"Accept-Encoding": "identity",
 	};
@@ -147,30 +121,18 @@ function passThroughHeaders(
 
 function errorHttpStatus(error: unknown): number | undefined {
 	if (typeof error !== "object" || error === null) return undefined;
-	const metadata = (error as { $metadata?: { httpStatusCode?: unknown } })
-		.$metadata;
+	const metadata = (error as { $metadata?: { httpStatusCode?: unknown } }).$metadata;
 	const status = metadata?.httpStatusCode;
 	return typeof status === "number" ? status : undefined;
 }
 
-function s3ErrorStatus(
-	error: unknown,
-	connection: ConnectionView,
-): number {
+function s3ErrorStatus(error: unknown, connection: ConnectionView): number {
 	const status = errorHttpStatus(error);
-	if (
-		status === 403 ||
-		status === 404 ||
-		status === 416 ||
-		(status !== undefined && status >= 500 && status <= 599)
-	) {
+	if (status === 403 || status === 404 || status === 416 || (status !== undefined && status >= 500 && status <= 599)) {
 		return status;
 	}
 	const mapped = mapS3Error(error, connection);
-	if (
-		mapped.code === "ACCESS_DENIED" ||
-		mapped.code === "SSO_LOGIN_REQUIRED"
-	) {
+	if (mapped.code === "ACCESS_DENIED" || mapped.code === "SSO_LOGIN_REQUIRED") {
 		return 403;
 	}
 	if (mapped.code === "NOT_FOUND") return 404;
@@ -220,9 +182,7 @@ function parseTotalContentRange(value: string | null): number | undefined {
 	return Number.isSafeInteger(size) ? size : undefined;
 }
 
-function parseUnsatisfiedContentRange(
-	value: string | null,
-): number | undefined {
+function parseUnsatisfiedContentRange(value: string | null): number | undefined {
 	if (value === null) return undefined;
 	const match = /^bytes \*\/(\d+)$/.exec(value);
 	if (!match?.[1]) return undefined;
@@ -241,10 +201,7 @@ function isEncodedContent(headers: Headers): boolean {
 	return encoding !== null && encoding.trim().toLowerCase() !== "identity";
 }
 
-function parsePassThroughSize(
-	status: number,
-	headers: Headers,
-): number | undefined {
+function parsePassThroughSize(status: number, headers: Headers): number | undefined {
 	if (isEncodedContent(headers)) {
 		return undefined;
 	}
@@ -324,10 +281,7 @@ function readableFromFetch(response: Response): Readable | undefined {
 	return Readable.from(response.body, { objectMode: false });
 }
 
-async function describePassThrough(
-	url: string,
-	signal?: AbortSignal,
-): Promise<StreamDescription> {
+async function describePassThrough(url: string, signal?: AbortSignal): Promise<StreamDescription> {
 	const requestSignal = signal ?? new AbortController().signal;
 	let response: Response;
 	try {
@@ -343,8 +297,7 @@ async function describePassThrough(
 		throw codedError("REQUEST_FAILED", "Request failed");
 	}
 	const status = response.status;
-	const contentType =
-		response.headers.get("content-type") ?? "application/octet-stream";
+	const contentType = response.headers.get("content-type") ?? "application/octet-stream";
 	const size = parsePassThroughSize(status, response.headers);
 	await cancelFetchBody(response);
 
@@ -354,10 +307,7 @@ async function describePassThrough(
 	if (status === 404 || status === 410) {
 		throw codedError("NOT_FOUND", "Not found");
 	}
-	if (
-		(status !== 200 && status !== 206 && status !== 416) ||
-		size === undefined
-	) {
+	if ((status !== 200 && status !== 206 && status !== 416) || size === undefined) {
 		throw codedError("REQUEST_FAILED", "Request failed");
 	}
 	return { contentType, size };
@@ -375,10 +325,9 @@ async function describeS3(
 	let output: HeadObjectCommandOutput;
 	try {
 		const client = await options.clients.get(connection);
-		output = await client.send(
-			new HeadObjectCommand({ Bucket: target.bucket, Key: target.key }),
-			{ abortSignal: signal },
-		);
+		output = await client.send(new HeadObjectCommand({ Bucket: target.bucket, Key: target.key }), {
+			abortSignal: signal,
+		});
 	} catch (error) {
 		const mapped = mapS3Error(error, connection);
 		throw Object.assign(new Error(mapped.message), mapped);
@@ -405,15 +354,9 @@ async function sendS3Failure(
 	const status = s3ErrorStatus(error, connection);
 	if (status === 416 && client) {
 		try {
-			const output = await client.send(
-				new HeadObjectCommand({ Bucket: bucket, Key: key }),
-				{ abortSignal: signal },
-			);
+			const output = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: signal });
 			if (typeof output.ContentLength === "number") {
-				response.setHeader(
-					"Content-Range",
-					`bytes */${output.ContentLength}`,
-				);
+				response.setHeader("Content-Range", `bytes */${output.ContentLength}`);
 			}
 		} catch {
 			// A failed size lookup does not change the fixed 416 response.
@@ -438,10 +381,9 @@ async function serveS3Head(
 	let client: Client | undefined;
 	try {
 		client = await options.clients.get(connection);
-		const output = await client.send(
-			new HeadObjectCommand({ Bucket: target.bucket, Key: target.key }),
-			{ abortSignal: signal },
-		);
+		const output = await client.send(new HeadObjectCommand({ Bucket: target.bucket, Key: target.key }), {
+			abortSignal: signal,
+		});
 		setS3Headers(response, output.ContentType, output.ContentLength);
 		response.statusCode = 200;
 		response.end();
@@ -530,8 +472,7 @@ async function passThroughHeadResult(
 	const acceptRanges = response.headers.get("accept-ranges");
 	const result: PassHeadResult = {
 		status: response.status,
-		contentType:
-			response.headers.get("content-type") ?? "application/octet-stream",
+		contentType: response.headers.get("content-type") ?? "application/octet-stream",
 		...(acceptRanges !== null ? { acceptRanges } : {}),
 		size: parsePassThroughSize(response.status, response.headers),
 	};
@@ -539,12 +480,8 @@ async function passThroughHeadResult(
 	return result;
 }
 
-function setPassThroughHeaders(
-	response: ServerResponse,
-	upstream: Response,
-): void {
-	const contentType =
-		upstream.headers.get("content-type") ?? "application/octet-stream";
+function setPassThroughHeaders(response: ServerResponse, upstream: Response): void {
+	const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
 	response.setHeader("Content-Type", contentType);
 	applyCspHeader(response, contentType);
 	if (!isEncodedContent(upstream.headers)) {
@@ -571,47 +508,24 @@ async function servePassThroughHead(
 ): Promise<void> {
 	let result: PassHeadResult;
 	try {
-		result = await passThroughHeadResult(
-			url,
-			passThroughHeaders(request, "bytes=0-0"),
-			signal,
-		);
+		result = await passThroughHeadResult(url, passThroughHeaders(request, "bytes=0-0"), signal);
 	} catch {
 		sendFixed(response, request.method ?? "HEAD", 502, "Upstream error");
 		return;
 	}
 
-	if (
-		result.status === 401 ||
-		result.status === 403 ||
-		result.status === 404
-	) {
+	if (result.status === 401 || result.status === 403 || result.status === 404) {
 		const mapped = passThroughError(result.status);
-		sendFixed(
-			response,
-			request.method ?? "HEAD",
-			mapped.status,
-			mapped.body,
-		);
+		sendFixed(response, request.method ?? "HEAD", mapped.status, mapped.body);
 		return;
 	}
 	if (result.status === 416 && result.size === undefined) {
 		sendFixed(response, request.method ?? "HEAD", 502, "Upstream error");
 		return;
 	}
-	if (
-		(result.status !== 200 &&
-			result.status !== 206 &&
-			result.status !== 416) ||
-		result.size === undefined
-	) {
+	if ((result.status !== 200 && result.status !== 206 && result.status !== 416) || result.size === undefined) {
 		const mapped = passThroughError(result.status);
-		sendFixed(
-			response,
-			request.method ?? "HEAD",
-			mapped.status,
-			mapped.body,
-		);
+		sendFixed(response, request.method ?? "HEAD", mapped.status, mapped.body);
 		return;
 	}
 
@@ -634,11 +548,7 @@ async function servePassThroughGet(
 ): Promise<void> {
 	let upstream: Response;
 	try {
-		upstream = await fetchWithRedirects(
-			url,
-			passThroughHeaders(request),
-			signal,
-		);
+		upstream = await fetchWithRedirects(url, passThroughHeaders(request), signal);
 	} catch {
 		sendFixed(response, request.method ?? "GET", 502, "Upstream error");
 		return;
@@ -653,12 +563,7 @@ async function servePassThroughGet(
 			}
 		}
 		await cancelFetchBody(upstream);
-		sendFixed(
-			response,
-			request.method ?? "GET",
-			mapped.status,
-			mapped.body,
-		);
+		sendFixed(response, request.method ?? "GET", mapped.status, mapped.body);
 		return;
 	}
 
@@ -716,13 +621,12 @@ async function routeRequest(
 	const match = /^\/o\/([0-9a-f]{32})$/.exec(parsed.pathname);
 	const handle = match?.[1];
 	const token = parsed.searchParams.get("t");
-	const target = handle ? options.registry.get(handle) : undefined;
-	if (
-		(request.method !== "GET" && request.method !== "HEAD") ||
-		!handle ||
-		!tokenMatches(token, expectedToken) ||
-		!target
-	) {
+	if ((request.method !== "GET" && request.method !== "HEAD") || !handle || !tokenMatches(token, expectedToken)) {
+		sendFixed(response, request.method ?? "GET", 403, "Forbidden");
+		return;
+	}
+	const target = options.registry.get(handle);
+	if (!target) {
 		sendFixed(response, request.method ?? "GET", 403, "Forbidden");
 		return;
 	}
@@ -743,31 +647,12 @@ async function routeRequest(
 	try {
 		if (target.kind === "s3") {
 			if (request.method === "HEAD") {
-				await serveS3Head(
-					request,
-					response,
-					target,
-					controller.signal,
-					options,
-				);
+				await serveS3Head(request, response, target, controller.signal, options);
 			} else {
-				await serveS3Get(
-					request,
-					response,
-					target,
-					controller.signal,
-					setBody,
-					options,
-				);
+				await serveS3Get(request, response, target, controller.signal, setBody, options);
 			}
 		} else {
-			await servePassThrough(
-				request,
-				response,
-				target,
-				controller.signal,
-				setBody,
-			);
+			await servePassThrough(request, response, target, controller.signal, setBody);
 		}
 	} catch {
 		upstreamBody?.destroy();
@@ -794,23 +679,12 @@ export function createStreamProxy(options: StreamProxyOptions): StreamProxy {
 				return starting;
 			}
 			const listeningServer = createServer((request, response) => {
-				void routeRequest(
-					request,
-					response,
-					options,
-					() => origin ?? "http://127.0.0.1",
-					proxyToken,
-				).catch(() => {
+				void routeRequest(request, response, options, () => origin ?? "http://127.0.0.1", proxyToken).catch(() => {
 					if (response.headersSent) {
 						response.destroy();
 					} else if (!response.destroyed) {
 						setCommonHeaders(response, options.appOrigin);
-						sendFixed(
-							response,
-							request.method ?? "GET",
-							502,
-							"Upstream error",
-						);
+						sendFixed(response, request.method ?? "GET", 502, "Upstream error");
 					}
 				});
 			});

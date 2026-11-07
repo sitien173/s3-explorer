@@ -1,19 +1,8 @@
 import { stat } from "node:fs/promises";
 import { basename, isAbsolute } from "node:path";
 import { channels, events } from "../../shared/channels";
-import {
-	opsProgressPayloadSchema,
-	type RequestByChannel,
-	type ResponseByChannel,
-} from "../../shared/ipc";
-import {
-	createFolder,
-	countPrefix,
-	deleteKeys,
-	deletePrefix,
-	renameObject,
-	renamePrefix,
-} from "../s3/ops";
+import { opsProgressPayloadSchema, type RequestByChannel, type ResponseByChannel } from "../../shared/ipc";
+import { createFolder, countPrefix, deleteKeys, deletePrefix, renameObject, renamePrefix } from "../s3/ops";
 import { TransferManager } from "../s3/transfers";
 import type { SenderLike } from "./register";
 import type { IpcDeps } from "./connections";
@@ -25,12 +14,8 @@ export interface SaveDialogOptions {
 	defaultPath?: string;
 }
 export interface DialogLike {
-	showOpenDialog(
-		options: OpenDialogOptions,
-	): Promise<{ canceled: boolean; filePaths: string[] }>;
-	showSaveDialog(
-		options: SaveDialogOptions,
-	): Promise<{ canceled: boolean; filePath?: string }>;
+	showOpenDialog(options: OpenDialogOptions): Promise<{ canceled: boolean; filePaths: string[] }>;
+	showSaveDialog(options: SaveDialogOptions): Promise<{ canceled: boolean; filePath?: string }>;
 }
 
 type OpsChannel =
@@ -61,12 +46,7 @@ function codedError(code: string, message: string): Error & { code: string } {
 }
 
 export function opsHandlers(deps: OpsDeps): HandlerMap {
-	function progress(
-		sender: SenderLike,
-		opId: string,
-		done: number,
-		total: number,
-	): void {
+	function progress(sender: SenderLike, opId: string, done: number, total: number): void {
 		if (sender.isDestroyed()) return;
 		const payload = opsProgressPayloadSchema.parse({ opId, done, total });
 		sender.send(events.opsProgress, payload);
@@ -78,9 +58,7 @@ export function opsHandlers(deps: OpsDeps): HandlerMap {
 		return deps.clients.get(connection);
 	}
 
-	const transfers =
-		deps.transfers ??
-		new TransferManager({ maxActive: deps.maxActiveTransfers });
+	const transfers = deps.transfers ?? new TransferManager({ maxActive: deps.maxActiveTransfers });
 
 	function requireDialog(): DialogLike {
 		if (!deps.dialog) throw codedError("REQUEST_FAILED", "Dialog unavailable");
@@ -137,11 +115,8 @@ export function opsHandlers(deps: OpsDeps): HandlerMap {
 		},
 		[channels.opsDeletePrefix]: async (request, { sender }) => {
 			const client = await getClient(request.connectionId);
-			return deletePrefix(
-				client,
-				request.bucket,
-				request.prefix,
-				(done, total) => progress(sender, request.opId, done, total),
+			return deletePrefix(client, request.bucket, request.prefix, (done, total) =>
+				progress(sender, request.opId, done, total),
 			);
 		},
 		[channels.opsCountPrefix]: async (request) => {
@@ -152,21 +127,12 @@ export function opsHandlers(deps: OpsDeps): HandlerMap {
 		},
 		[channels.opsRename]: async (request) => {
 			const client = await getClient(request.connectionId);
-			return renameObject(
-				client,
-				request.bucket,
-				request.fromKey,
-				request.toKey,
-			);
+			return renameObject(client, request.bucket, request.fromKey, request.toKey);
 		},
 		[channels.opsRenamePrefix]: async (request, { sender }) => {
 			const client = await getClient(request.connectionId);
-			return renamePrefix(
-				client,
-				request.bucket,
-				request.fromPrefix,
-				request.toPrefix,
-				(done, total) => progress(sender, request.opId, done, total),
+			return renamePrefix(client, request.bucket, request.fromPrefix, request.toPrefix, (done, total) =>
+				progress(sender, request.opId, done, total),
 			);
 		},
 		[channels.transfersUpload]: async (request, { sender }) => {
@@ -178,24 +144,12 @@ export function opsHandlers(deps: OpsDeps): HandlerMap {
 			if (chosen.canceled || chosen.filePaths.length === 0) {
 				return { transferIds: [] };
 			}
-			const { transferIds } = await startUploads(
-				client,
-				sender,
-				request.bucket,
-				request.prefix,
-				chosen.filePaths,
-			);
+			const { transferIds } = await startUploads(client, sender, request.bucket, request.prefix, chosen.filePaths);
 			return { transferIds };
 		},
 		[channels.transfersUploadPaths]: async (request, { sender }) => {
 			const client = await getClient(request.connectionId);
-			return startUploads(
-				client,
-				sender,
-				request.bucket,
-				request.prefix,
-				request.paths,
-			);
+			return startUploads(client, sender, request.bucket, request.prefix, request.paths);
 		},
 		[channels.transfersDownload]: async (request, { sender }) => {
 			const dialog = requireDialog();

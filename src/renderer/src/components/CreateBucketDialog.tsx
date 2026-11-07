@@ -1,17 +1,13 @@
-import {
-	useEffect,
-	useId,
-	useRef,
-	useState,
-	type ChangeEvent,
-	type FormEvent,
-	type JSX,
-} from "react";
-import { createBucketName } from "../../../shared/ipc";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useId, useMemo, useRef, type JSX } from "react";
+import { useForm } from "react-hook-form";
 import { api } from "../api";
+import { createBucketFormSchema } from "../forms";
 import { buildOperationFailedToast, notify } from "../toasts";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
+import { FieldError } from "./ui/field";
+import { Input } from "./ui/input";
 
 export interface CreateBucketDialogProps {
 	open: boolean;
@@ -29,19 +25,25 @@ export function CreateBucketDialog({
 	onCreated,
 }: CreateBucketDialogProps): JSX.Element | null {
 	const inputId = useId();
-	const [name, setName] = useState<string>("");
-	const [error, setError] = useState<string | null>(null);
-	const [busy, setBusy] = useState<boolean>(false);
+	const schema = useMemo(() => createBucketFormSchema(existingNames), [existingNames]);
+	const {
+		register,
+		handleSubmit,
+		reset,
+		setError,
+		formState: { errors, isSubmitting: busy },
+	} = useForm<{ bucket: string }, unknown, { bucket: string }>({
+		resolver: zodResolver(schema),
+		defaultValues: { bucket: "" },
+	});
 	const busyRef = useRef<boolean>(false);
 
 	useEffect(() => {
 		if (!open) {
-			setName("");
-			setError(null);
-			setBusy(false);
+			reset({ bucket: "" });
 			busyRef.current = false;
 		}
-	}, [open]);
+	}, [open, reset]);
 
 	if (!open) {
 		return null;
@@ -53,40 +55,26 @@ export function CreateBucketDialog({
 		}
 	}
 
-	async function handleSubmit(): Promise<void> {
+	async function onValid({ bucket }: { bucket: string }): Promise<void> {
 		if (busyRef.current) {
 			return;
 		}
-		const trimmed = name.trim();
-		const parsed = createBucketName.safeParse(trimmed);
-		if (!parsed.success) {
-			setError(parsed.error.issues[0]?.message ?? "Invalid bucket name");
-			return;
-		}
-		if (existingNames.includes(trimmed)) {
-			setError("A bucket with this name is already listed");
-			return;
-		}
-
 		busyRef.current = true;
-		setBusy(true);
-		setError(null);
 		try {
 			const res = await api.buckets.create({
 				connectionId,
-				bucket: trimmed,
+				bucket,
 			});
 			if (res.ok) {
-				onCreated(trimmed, res.data.warning);
+				onCreated(bucket, res.data.warning);
 				onOpenChange(false);
 			} else {
-				setError(res.error.message);
+				setError("bucket", { message: res.error.message });
 			}
 		} catch {
 			notify(buildOperationFailedToast("Create bucket"));
 		} finally {
 			busyRef.current = false;
-			setBusy(false);
 		}
 	}
 
@@ -97,20 +85,10 @@ export function CreateBucketDialog({
 			onClose={requestClose}
 			footer={
 				<>
-					<Button
-						type="button"
-						variant="secondary"
-						onClick={requestClose}
-						disabled={busy}
-					>
+					<Button type="button" variant="secondary" onClick={requestClose} disabled={busy}>
 						Cancel
 					</Button>
-					<Button
-						type="submit"
-						variant="default"
-						form={`${inputId}-form`}
-						disabled={busy}
-					>
+					<Button type="submit" variant="default" form={`${inputId}-form`} disabled={busy}>
 						{busy ? "Creating..." : "Create bucket"}
 					</Button>
 				</>
@@ -118,33 +96,22 @@ export function CreateBucketDialog({
 		>
 			<form
 				id={`${inputId}-form`}
-				onSubmit={(e: FormEvent<HTMLFormElement>) => {
-					e.preventDefault();
-					void handleSubmit();
+				onSubmit={(e) => {
+					void handleSubmit(onValid)(e);
 				}}
 			>
-				<div
-					className={`tds-text-input app-dialog-field ${error ? "tds-text-input--error" : ""}`}
-				>
-					<label htmlFor={inputId} className="tds-field-label">
+				<div className="flex w-full min-w-0 flex-col gap-1">
+					<label htmlFor={inputId} className="text-xs font-medium text-foreground">
 						Bucket name (required)
 					</label>
-					<input
+					<Input
 						id={inputId}
 						type="text"
-						className="tds-text-input__field"
-						value={name}
-						onChange={(e: ChangeEvent<HTMLInputElement>) => {
-							setName(e.target.value);
-							if (error) {
-								setError(null);
-							}
-						}}
+						className={errors.bucket ? "border-destructive" : undefined}
+						{...register("bucket")}
 						placeholder="my-new-bucket"
 					/>
-					{error && (
-						<span className="tds-field-validation">{error}</span>
-					)}
+					<FieldError error={errors.bucket} />
 				</div>
 			</form>
 		</Dialog>

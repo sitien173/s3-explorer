@@ -1,9 +1,13 @@
 import {
 	CopyObjectCommand,
+	type CopyObjectCommandOutput,
 	DeleteObjectCommand,
 	DeleteObjectsCommand,
+	type DeleteObjectsCommandOutput,
 	HeadObjectCommand,
+	type HeadObjectCommandOutput,
 	ListObjectsV2Command,
+	type ListObjectsV2CommandOutput,
 	PutObjectCommand,
 	type S3Client,
 } from "@aws-sdk/client-s3";
@@ -27,11 +31,7 @@ export function batchKeys(keys: string[]): string[][] {
 	return batches;
 }
 
-export function mapPrefixKey(
-	key: string,
-	fromPrefix: string,
-	toPrefix: string,
-): string {
+export function mapPrefixKey(key: string, fromPrefix: string, toPrefix: string): string {
 	return toPrefix + key.slice(fromPrefix.length);
 }
 
@@ -39,16 +39,10 @@ export function copySource(bucket: string, key: string): string {
 	return `${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-const coded = (code: string, message: string) =>
-	Object.assign(new Error(message), { code });
+const coded = (code: string, message: string) => Object.assign(new Error(message), { code });
 
-async function copyThenDelete(
-	client: Client,
-	bucket: string,
-	source: string,
-	destination: string,
-): Promise<void> {
-	let result;
+async function copyThenDelete(client: Client, bucket: string, source: string, destination: string): Promise<void> {
+	let result: CopyObjectCommandOutput;
 	try {
 		result = await client.send(
 			new CopyObjectCommand({
@@ -60,10 +54,7 @@ async function copyThenDelete(
 	} catch (error) {
 		throwMappedError(error);
 	}
-	if (
-		typeof result.CopyObjectResult?.ETag !== "string" ||
-		!result.CopyObjectResult.ETag
-	) {
+	if (typeof result.CopyObjectResult?.ETag !== "string" || !result.CopyObjectResult.ETag) {
 		throw new Error("Copy not confirmed");
 	}
 	try {
@@ -83,11 +74,9 @@ export async function renameObject(
 		throw coded("INVALID_REQUEST", "Source and destination are the same");
 	}
 
-	let source;
+	let source: HeadObjectCommandOutput;
 	try {
-		source = await client.send(
-			new HeadObjectCommand({ Bucket: bucket, Key: fromKey }),
-		);
+		source = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: fromKey }));
 	} catch (error) {
 		throwMappedError(error);
 	}
@@ -100,11 +89,7 @@ export async function renameObject(
 		throw coded("CONFLICT", "Destination exists");
 	} catch (error) {
 		if ((error as { code?: string }).code === "CONFLICT") throw error;
-		if (
-			!["NotFound", "NoSuchKey"].includes(
-				(error as { name?: string }).name ?? "",
-			)
-		) {
+		if (!["NotFound", "NoSuchKey"].includes((error as { name?: string }).name ?? "")) {
 			throwMappedError(error);
 		}
 	}
@@ -113,15 +98,11 @@ export async function renameObject(
 	return { key: toKey };
 }
 
-async function list(
-	client: Client,
-	bucket: string,
-	prefix: string,
-): Promise<{ Key: string; Size: number }[]> {
+async function list(client: Client, bucket: string, prefix: string): Promise<{ Key: string; Size: number }[]> {
 	const rows: { Key: string; Size: number }[] = [];
 	let token: string | undefined;
 	do {
-		let page;
+		let page: ListObjectsV2CommandOutput;
 		try {
 			page = await client.send(
 				new ListObjectsV2Command({
@@ -134,8 +115,7 @@ async function list(
 			throwMappedError(error);
 		}
 		for (const item of page.Contents ?? []) {
-			if (item.Key !== undefined)
-				rows.push({ Key: item.Key, Size: item.Size ?? 0 });
+			if (item.Key !== undefined) rows.push({ Key: item.Key, Size: item.Size ?? 0 });
 		}
 		token = page.IsTruncated ? page.NextContinuationToken : undefined;
 	} while (token);
@@ -155,16 +135,12 @@ export async function renamePrefix(
 
 	const sources = await list(client, bucket, fromPrefix);
 	if (sources.length === 0) throw coded("NOT_FOUND", "Request failed");
-	const destinations = sources.map(({ Key }) =>
-		mapPrefixKey(Key, fromPrefix, toPrefix),
-	);
+	const destinations = sources.map(({ Key }) => mapPrefixKey(Key, fromPrefix, toPrefix));
 	if (sources.some((source) => source.Size > MAX_COPY_BYTES)) {
 		throw coded("TOO_LARGE", "Too large to rename");
 	}
 
-	const existing = new Set(
-		(await list(client, bucket, toPrefix)).map((item) => item.Key),
-	);
+	const existing = new Set((await list(client, bucket, toPrefix)).map((item) => item.Key));
 	if (destinations.some((key) => existing.has(key))) {
 		throw coded("CONFLICT", "Destination exists");
 	}
@@ -179,9 +155,7 @@ export async function renamePrefix(
 		} catch (error) {
 			const candidate = error as { code?: unknown; message?: string };
 			const code = toErrorCode(candidate?.code);
-			const mapped = code
-				? { code, message: candidate.message ?? "Request failed" }
-				: mapS3Error(error);
+			const mapped = code ? { code, message: candidate.message ?? "Request failed" } : mapS3Error(error);
 			return {
 				completed,
 				remaining: sources.slice(i).map((item) => item.Key),
@@ -203,7 +177,7 @@ export async function deleteKeys(
 	const completed: string[] = [];
 	for (let i = 0; i < batches.length; i++) {
 		const batch = batches[i]!;
-		let output;
+		let output: DeleteObjectsCommandOutput;
 		try {
 			output = await client.send(
 				new DeleteObjectsCommand({
@@ -222,9 +196,7 @@ export async function deleteKeys(
 
 		const requested = new Set(batch);
 		const deleted = new Set(
-			(output.Deleted ?? [])
-				.map((item) => item.Key)
-				.filter((key): key is string => !!key && requested.has(key)),
+			(output.Deleted ?? []).map((item) => item.Key).filter((key): key is string => !!key && requested.has(key)),
 		);
 		completed.push(...batch.filter((key) => deleted.has(key)));
 		progress?.(completed.length, total);
@@ -253,15 +225,11 @@ export async function deletePrefix(
 	return deleteKeys(client, bucket, keys, progress);
 }
 
-export async function countPrefix(
-	client: Client,
-	bucket: string,
-	prefix: string,
-): Promise<number> {
+export async function countPrefix(client: Client, bucket: string, prefix: string): Promise<number> {
 	let count = 0;
 	let token: string | undefined;
 	do {
-		let page;
+		let page: ListObjectsV2CommandOutput;
 		try {
 			page = await client.send(
 				new ListObjectsV2Command({
@@ -279,11 +247,7 @@ export async function countPrefix(
 	return count;
 }
 
-export async function createFolder(
-	client: Client,
-	bucket: string,
-	key: string,
-): Promise<{ key: string }> {
+export async function createFolder(client: Client, bucket: string, key: string): Promise<{ key: string }> {
 	try {
 		await client.send(
 			new PutObjectCommand({

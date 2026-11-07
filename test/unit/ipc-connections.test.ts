@@ -22,9 +22,8 @@ const channels = [
 
 describe("connection IPC", () => {
 	it("exposes an inferred create request type that requires its discriminator", () => {
-		expectTypeOf<Api["connections"]["create"]>()
-			.parameter(0)
-			.toEqualTypeOf<CreateRequest>();
+		expectTypeOf<Api["connections"]["create"]>().parameter(0).toEqualTypeOf<CreateRequest>();
+		// biome-ignore lint/correctness/noConstantCondition: compile-time-only branch for the @ts-expect-error type check.
 		if (false) {
 			// @ts-expect-error Create requests must include their kind discriminator.
 			void (null as unknown as Api).connections.create({
@@ -48,8 +47,7 @@ describe("connection IPC", () => {
 		const clients: any = {
 			get: async () => ({
 				send: async () => {
-					if (sendMode === "failure")
-						throw new Error("failed for AKIAFIXTUREFIXTURE00");
+					if (sendMode === "failure") throw new Error("failed for AKIAFIXTUREFIXTURE00");
 					if (sendMode === "sso")
 						throw Object.assign(new Error("Token is expired."), {
 							name: "TokenProviderError",
@@ -68,8 +66,7 @@ describe("connection IPC", () => {
 		};
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			deps,
 		);
@@ -114,9 +111,7 @@ describe("connection IPC", () => {
 		}
 		expect(invalidated).toContain(manual.id);
 		expect(invalidated).toContain(another.id);
-		const manualView = (
-			await handlers.get("connections:list")({}, {})
-		).data.find((item: any) => item.id === manual.id);
+		const manualView = (await handlers.get("connections:list")({}, {})).data.find((item: any) => item.id === manual.id);
 		expect(manualView).toMatchObject({ hasSecret: true, kind: "manual" });
 
 		for (const channel of channels) {
@@ -128,26 +123,17 @@ describe("connection IPC", () => {
 			assertNoSecrets(result);
 		}
 
-		const unknown = await handlers.get("connections:ssoLogin")(
-			{},
-			{ profile: "unknown" },
-		);
+		const unknown = await handlers.get("connections:ssoLogin")({}, { profile: "unknown" });
 		expect(unknown).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 		assertNoSecrets(unknown);
 
 		sendMode = "failure";
-		const failed = await handlers.get("connections:testConnection")(
-			{},
-			{ id: manual.id },
-		);
+		const failed = await handlers.get("connections:testConnection")({}, { id: manual.id });
 		expect(failed.error.code).toBe("REQUEST_FAILED");
 		assertNoSecrets(failed);
 
 		sendMode = "sso";
-		const ssoFailure = await handlers.get("connections:testConnection")(
-			{},
-			{ id: profile.id },
-		);
+		const ssoFailure = await handlers.get("connections:testConnection")({}, { id: profile.id });
 		expect(ssoFailure).toMatchObject({
 			ok: false,
 			error: { code: "SSO_LOGIN_REQUIRED", profile: "sso-dev" },
@@ -170,8 +156,7 @@ describe("connection IPC", () => {
 		const handlers = new Map<string, any>();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients: new S3ClientFactory(store, vault) } as any,
 		);
@@ -220,8 +205,7 @@ describe("connection IPC", () => {
 		const handlers = new Map<string, any>();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients: new S3ClientFactory(store, vault) } as any,
 		);
@@ -252,10 +236,7 @@ describe("connection IPC", () => {
 			secretAccessKey: "fixture-secret",
 		});
 		const records = JSON.parse(
-			await (await import("node:fs/promises")).readFile(
-				join(directory, "connections.json"),
-				"utf8",
-			),
+			await (await import("node:fs/promises")).readFile(join(directory, "connections.json"), "utf8"),
 		);
 		expect(records[0]).not.toHaveProperty("region");
 		expect(records[0]).not.toHaveProperty("endpoint");
@@ -269,10 +250,7 @@ describe("connection IPC", () => {
 			encryptString: (value: string) => Buffer.from(value),
 			decryptString: (value: Buffer) => value.toString(),
 		};
-		const initialStore = new ConnectionStore(
-			directory,
-			new SecretVault(directory, insecureCipher),
-		);
+		const initialStore = new ConnectionStore(directory, new SecretVault(directory, insecureCipher));
 		const connection = await initialStore.create({
 			kind: "manual",
 			name: "reentry",
@@ -280,22 +258,15 @@ describe("connection IPC", () => {
 			accessKeyId: "AKIAFIXTUREFIXTURE00",
 			secretAccessKey: "old-secret",
 		});
-		const store = new ConnectionStore(
-			directory,
-			new SecretVault(directory, insecureCipher),
-		);
+		const store = new ConnectionStore(directory, new SecretVault(directory, insecureCipher));
 		const handlers = new Map<string, any>();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{
 				store,
-				clients: new S3ClientFactory(
-					store,
-					new SecretVault(directory, insecureCipher),
-				),
+				clients: new S3ClientFactory(store, new SecretVault(directory, insecureCipher)),
 			} as any,
 		);
 		expect((await store.get(connection.id))?.hasSecret).toBe(false);
@@ -319,10 +290,7 @@ describe("connection IPC", () => {
 			encryptString: (value: string) => Buffer.from(value),
 			decryptString: (value: Buffer) => value.toString(),
 		};
-		const store = new ConnectionStore(
-			directory,
-			new SecretVault(directory, cipher),
-		);
+		const store = new ConnectionStore(directory, new SecretVault(directory, cipher));
 		const connection = await store.create({
 			kind: "manual",
 			name: "partial",
@@ -330,22 +298,15 @@ describe("connection IPC", () => {
 			accessKeyId: "AKIAFIXTUREFIXTURE00",
 			secretAccessKey: "old-secret",
 		});
-		const restartedStore = new ConnectionStore(
-			directory,
-			new SecretVault(directory, cipher),
-		);
+		const restartedStore = new ConnectionStore(directory, new SecretVault(directory, cipher));
 		const handlers = new Map<string, any>();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{
 				store: restartedStore,
-				clients: new S3ClientFactory(
-					restartedStore,
-					new SecretVault(directory, cipher),
-				),
+				clients: new S3ClientFactory(restartedStore, new SecretVault(directory, cipher)),
 			} as any,
 		);
 
@@ -380,8 +341,7 @@ describe("connection IPC", () => {
 		const handlers = new Map<string, any>();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{
 				store,
@@ -420,8 +380,7 @@ describe("connection IPC", () => {
 		const handlers = new Map<string, any>();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{
 				store,
@@ -454,8 +413,7 @@ describe("connection IPC", () => {
 		const handlers = new Map<string, any>();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{
 				store: {

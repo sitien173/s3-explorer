@@ -1,10 +1,4 @@
-export type ViewerKind =
-	| "video"
-	| "audio"
-	| "image"
-	| "pdf"
-	| "text"
-	| "unsupported";
+export type ViewerKind = "video" | "audio" | "image" | "pdf" | "text" | "unsupported";
 
 const videoMimeTypes = new Set([
 	"video/mp4",
@@ -46,25 +40,8 @@ const imageMimeTypes = new Set([
 ]);
 
 const videoExtensions = new Set(["mp4", "m4v", "webm", "mkv"]);
-const audioExtensions = new Set([
-	"mp3",
-	"aac",
-	"m4a",
-	"flac",
-	"ogg",
-	"oga",
-	"opus",
-	"wav",
-]);
-const imageExtensions = new Set([
-	"jpeg",
-	"jpg",
-	"png",
-	"gif",
-	"webp",
-	"avif",
-	"svg",
-]);
+const audioExtensions = new Set(["mp3", "aac", "m4a", "flac", "ogg", "oga", "opus", "wav"]);
+const imageExtensions = new Set(["jpeg", "jpg", "png", "gif", "webp", "avif", "svg"]);
 const textExtensions = new Set([
 	"txt",
 	"md",
@@ -114,41 +91,26 @@ export function getFileExtension(key: string): string {
 }
 
 function isGenericContentType(cleanType: string): boolean {
-	return (
-		cleanType === "" ||
-		cleanType === "application/octet-stream" ||
-		cleanType === "binary/octet-stream"
-	);
+	return cleanType === "" || cleanType === "application/octet-stream" || cleanType === "binary/octet-stream";
 }
 
 function isTextMimeType(cleanType: string): boolean {
 	if (cleanType.startsWith("text/")) {
 		return true;
 	}
-	if (
-		cleanType === "application/json" ||
-		cleanType === "application/ld+json" ||
-		cleanType.endsWith("+json")
-	) {
+	if (cleanType === "application/json" || cleanType === "application/ld+json" || cleanType.endsWith("+json")) {
 		return true;
 	}
 	if (cleanType === "application/xml" || cleanType.endsWith("+xml")) {
 		return true;
 	}
-	if (
-		cleanType === "application/x-yaml" ||
-		cleanType === "application/yaml" ||
-		cleanType === "text/yaml"
-	) {
+	if (cleanType === "application/x-yaml" || cleanType === "application/yaml" || cleanType === "text/yaml") {
 		return true;
 	}
 	if (cleanType === "application/toml" || cleanType === "text/x-toml") {
 		return true;
 	}
-	if (
-		cleanType === "application/javascript" ||
-		cleanType === "text/javascript"
-	) {
+	if (cleanType === "application/javascript" || cleanType === "text/javascript") {
 		return true;
 	}
 	return false;

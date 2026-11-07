@@ -1,54 +1,43 @@
-import { useEffect, useState, type JSX } from "react";
+import { useState, type JSX } from "react";
+import { AlertDescription, AlertTitle, BANNER_DESTRUCTIVE_CLASS } from "../ui/alert";
+import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
 
 export interface ImageViewProps {
 	url: string;
 	fileName: string;
 	onOpenWithSystemApp: () => void;
+	onLoadError?: () => void;
 }
 
-export function ImageView({
-	url,
-	fileName,
-	onOpenWithSystemApp,
-}: ImageViewProps): JSX.Element {
+export function ImageView({ url, fileName, onOpenWithSystemApp, onLoadError }: ImageViewProps): JSX.Element {
 	const [hasError, setHasError] = useState<boolean>(false);
-
-	useEffect(() => {
-		setHasError(false);
-	}, [url]);
 
 	if (hasError) {
 		return (
-			<div className="tds-announcement tds-announcement--negative app-viewer-announcement">
-				<div className="tds-announcement__content">
-					<div className="tds-announcement__title">
-						Format not supported
-					</div>
-					<div className="tds-announcement__message">
-						This image format cannot be displayed in the browser.
-					</div>
+			<div className={cn("m-2 shrink-0", BANNER_DESTRUCTIVE_CLASS)}>
+				<div className="min-w-0 flex-1">
+					<AlertTitle>Format not supported</AlertTitle>
+					<AlertDescription>This image format cannot be displayed in the browser.</AlertDescription>
 				</div>
-				<div className="tds-announcement__actions">
-					<button
-						type="button"
-						className="tds-btn tds-btn--sm tds-btn--primary"
-						onClick={onOpenWithSystemApp}
-					>
+				<div className="flex shrink-0 items-center">
+					<Button type="button" size="sm" onClick={onOpenWithSystemApp}>
 						Open with system app
-					</button>
+					</Button>
 				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className="app-image-view-container">
+		<div className="flex h-full items-center justify-center overflow-auto p-3">
 			<img
 				src={url}
 				alt={fileName}
-				className="app-image-view"
+				className="max-h-full max-w-full rounded-surface object-contain"
 				onError={() => {
-					setHasError(true);
+					if (onLoadError) onLoadError();
+					else setHasError(true);
 				}}
 			/>
 		</div>

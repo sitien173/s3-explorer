@@ -3,10 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ConnectionStore } from "../../src/main/connections/store";
-import {
-	SecretVault,
-	type SecretCipher,
-} from "../../src/main/connections/secrets";
+import { SecretVault, type SecretCipher } from "../../src/main/connections/secrets";
 const secret = {
 	accessKeyId: "AKIAFIXTUREFIXTURE00",
 	secretAccessKey: "fixture-secret",
@@ -89,12 +86,8 @@ describe("connection store", () => {
 		});
 		expect(created.hasSecret).toBe(true);
 		expect(created.sessionOnly).toBe(false);
-		expect(await readFile(join(dir, "secrets.json"), "utf8")).not.toContain(
-			secret.secretAccessKey,
-		);
-		expect((await stat(join(dir, "connections.json"))).mode & 0o777).toBe(
-			0o600,
-		);
+		expect(await readFile(join(dir, "secrets.json"), "utf8")).not.toContain(secret.secretAccessKey);
+		expect((await stat(join(dir, "connections.json"))).mode & 0o777).toBe(0o600);
 		expect((await stat(join(dir, "secrets.json"))).mode & 0o777).toBe(0o600);
 		expect(await vault.get(created.id)).toMatchObject(secret);
 		await store.update(created.id, { secretAccessKey: "new-secret" });
@@ -104,11 +97,7 @@ describe("connection store", () => {
 		await store.delete(created.id);
 		expect(await store.list()).toHaveLength(0);
 		expect(await vault.get(created.id)).toBeUndefined();
-		for (const c of [
-			cipher("basic_text"),
-			cipher("unknown"),
-			cipher("gnome-libsecret", false),
-		]) {
+		for (const c of [cipher("basic_text"), cipher("unknown"), cipher("gnome-libsecret", false)]) {
 			const d = await makeTempDir("s3-session-");
 			const v = new SecretVault(d, c);
 			const s = new ConnectionStore(d, v);
@@ -141,10 +130,7 @@ describe("connection store", () => {
 			decryptCalls += 1;
 			throw new Error("must not decrypt");
 		};
-		const restartedStore = new ConnectionStore(
-			dir,
-			new SecretVault(dir, unavailableCipher),
-		);
+		const restartedStore = new ConnectionStore(dir, new SecretVault(dir, unavailableCipher));
 		expect(await restartedStore.get(created.id)).toMatchObject({
 			hasSecret: false,
 			sessionOnly: false,
@@ -155,10 +141,7 @@ describe("connection store", () => {
 		brokenCipher.decryptString = () => {
 			throw new Error(`unsafe decrypt ${secret.secretAccessKey}`);
 		};
-		const brokenStore = new ConnectionStore(
-			dir,
-			new SecretVault(dir, brokenCipher),
-		);
+		const brokenStore = new ConnectionStore(dir, new SecretVault(dir, brokenCipher));
 		expect(await brokenStore.get(created.id)).toMatchObject({
 			hasSecret: false,
 			sessionOnly: false,

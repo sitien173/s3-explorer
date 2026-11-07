@@ -6,10 +6,8 @@ export type ResolvedUrl =
 			key: string;
 			region?: string;
 			url: string;
-	};
-export type ResolveResult =
-	| { ok: true; value: ResolvedUrl }
-	| { ok: false; reason: "invalid" | "unsupported" };
+	  };
+export type ResolveResult = { ok: true; value: ResolvedUrl } | { ok: false; reason: "invalid" | "unsupported" };
 
 type AwsHostMatch = {
 	bucket?: string;
@@ -43,11 +41,7 @@ function decodePathSegments(pathname: string): string[] | undefined {
 	}
 }
 
-function objectFromPathStyle(
-	parsed: URL,
-	input: string,
-	regionValue?: string,
-): ResolveResult {
+function objectFromPathStyle(parsed: URL, input: string, regionValue?: string): ResolveResult {
 	const segments = decodePathSegments(parsed.pathname);
 	if (!segments) return { ok: false, reason: "invalid" };
 	const bucket = segments[0] ?? "";
@@ -65,12 +59,7 @@ function objectFromPathStyle(
 	};
 }
 
-function objectFromVirtualPath(
-	parsed: URL,
-	input: string,
-	bucket: string,
-	regionValue?: string,
-): ResolveResult {
+function objectFromVirtualPath(parsed: URL, input: string, bucket: string, regionValue?: string): ResolveResult {
 	const segments = decodePathSegments(parsed.pathname);
 	if (!segments) return { ok: false, reason: "invalid" };
 	const key = segments.join("/");
@@ -120,13 +109,8 @@ function isAwsLookalike(hostname: string): boolean {
 }
 
 function isPresigned(parsed: URL): boolean {
-	const names = new Set(
-		Array.from(parsed.searchParams.keys(), (name) => name.toLowerCase()),
-	);
-	return (
-		names.has("x-amz-signature") ||
-		(names.has("signature") && names.has("expires"))
-	);
+	const names = new Set(Array.from(parsed.searchParams.keys(), (name) => name.toLowerCase()));
+	return names.has("x-amz-signature") || (names.has("signature") && names.has("expires"));
 }
 
 function canonicalS3Url(bucket: string, key: string): string {
@@ -140,10 +124,7 @@ function canonicalS3Url(bucket: string, key: string): string {
 	return `https://${bucket}.s3.amazonaws.com/${encodedKey}`;
 }
 
-export function resolveUrl(
-	input: string,
-	options: { endpointHosts: readonly string[] },
-): ResolveResult {
+export function resolveUrl(input: string, options: { endpointHosts: readonly string[] }): ResolveResult {
 	const trimmed = input.trim();
 	if (!trimmed || trimmed.length > 8192) {
 		return { ok: false, reason: "invalid" };
@@ -188,12 +169,7 @@ export function resolveUrl(
 		const awsMatch = matchAwsHost(hostname);
 		if (awsMatch) {
 			if (awsMatch.bucket !== undefined) {
-				return objectFromVirtualPath(
-					parsed,
-					trimmed,
-					awsMatch.bucket,
-					awsMatch.region,
-				);
+				return objectFromVirtualPath(parsed, trimmed, awsMatch.bucket, awsMatch.region);
 			}
 			return objectFromPathStyle(parsed, trimmed, awsMatch.region);
 		}
@@ -216,9 +192,7 @@ export function resolveUrl(
 	return { ok: false, reason: "unsupported" };
 }
 
-export function endpointHostOf(
-	endpoint: string | undefined,
-): string | undefined {
+export function endpointHostOf(endpoint: string | undefined): string | undefined {
 	if (endpoint === undefined) return undefined;
 	try {
 		return new URL(endpoint).host.toLowerCase();

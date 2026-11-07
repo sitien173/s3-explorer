@@ -1,6 +1,5 @@
 export function assertNoSecrets(value: unknown): void {
-	const forbidden =
-		/(AKIA|ASIA|aws_secret|SecretAccessKey|SessionToken|X-Amz-Signature)/i;
+	const forbidden = /(AKIA|ASIA|aws_secret|SecretAccessKey|SessionToken|X-Amz-Signature)/i;
 	const visit = (v: unknown): void => {
 		if (typeof v === "string") {
 			if (forbidden.test(v)) throw new Error("Secret-like content found");

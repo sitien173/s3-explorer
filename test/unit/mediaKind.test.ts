@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-type ViewerKind =
-	| "video"
-	| "audio"
-	| "image"
-	| "pdf"
-	| "text"
-	| "unsupported";
+type ViewerKind = "video" | "audio" | "image" | "pdf" | "text" | "unsupported";
 
 interface MediaKindModule {
 	isMkv(contentType: string, key: string): boolean;
@@ -15,8 +9,7 @@ interface MediaKindModule {
 }
 
 const modulePath = "../../src/renderer/src/mediaKind";
-const { isMkv, isPdfContentType, mediaKind } =
-	(await import(modulePath)) as MediaKindModule;
+const { isMkv, isPdfContentType, mediaKind } = (await import(modulePath)) as MediaKindModule;
 
 describe("mediaKind", () => {
 	describe("isPdfContentType", () => {
@@ -51,28 +44,16 @@ describe("mediaKind", () => {
 		});
 
 		it("identifies mp4, m4v, webm, and mkv via extension fallback", () => {
-			expect(mediaKind("application/octet-stream", "movie.mp4")).toBe(
-				"video",
-			);
-			expect(mediaKind("application/octet-stream", "movie.m4v")).toBe(
-				"video",
-			);
-			expect(mediaKind("application/octet-stream", "movie.webm")).toBe(
-				"video",
-			);
-			expect(mediaKind("application/octet-stream", "movie.mkv")).toBe(
-				"video",
-			);
+			expect(mediaKind("application/octet-stream", "movie.mp4")).toBe("video");
+			expect(mediaKind("application/octet-stream", "movie.m4v")).toBe("video");
+			expect(mediaKind("application/octet-stream", "movie.webm")).toBe("video");
+			expect(mediaKind("application/octet-stream", "movie.mkv")).toBe("video");
 		});
 
 		it("identifies mov only if video/mp4-compatible type", () => {
 			expect(mediaKind("video/mp4", "movie.mov")).toBe("video");
-			expect(mediaKind("application/octet-stream", "movie.mov")).toBe(
-				"unsupported",
-			);
-			expect(mediaKind("video/quicktime", "movie.mov")).toBe(
-				"unsupported",
-			);
+			expect(mediaKind("application/octet-stream", "movie.mov")).toBe("unsupported");
+			expect(mediaKind("video/quicktime", "movie.mov")).toBe("unsupported");
 		});
 	});
 
@@ -100,9 +81,7 @@ describe("mediaKind", () => {
 			});
 
 			it(`identifies ${ext} by extension with octet-stream`, () => {
-				expect(mediaKind("application/octet-stream", `track.${ext}`)).toBe(
-					"audio",
-				);
+				expect(mediaKind("application/octet-stream", `track.${ext}`)).toBe("audio");
 			});
 		}
 	});
@@ -123,9 +102,7 @@ describe("mediaKind", () => {
 			});
 
 			it(`identifies ${ext} by extension with octet-stream`, () => {
-				expect(mediaKind("application/octet-stream", `img.${ext}`)).toBe(
-					"image",
-				);
+				expect(mediaKind("application/octet-stream", `img.${ext}`)).toBe("image");
 			});
 		}
 	});
@@ -137,12 +114,8 @@ describe("mediaKind", () => {
 		});
 
 		it("returns unsupported for pdf extension with generic content type", () => {
-			expect(mediaKind("application/octet-stream", "doc.pdf")).toBe(
-				"unsupported",
-			);
-			expect(mediaKind("binary/octet-stream", "doc.pdf")).toBe(
-				"unsupported",
-			);
+			expect(mediaKind("application/octet-stream", "doc.pdf")).toBe("unsupported");
+			expect(mediaKind("binary/octet-stream", "doc.pdf")).toBe("unsupported");
 			expect(mediaKind("", "doc.pdf")).toBe("unsupported");
 		});
 
@@ -206,12 +179,8 @@ describe("mediaKind", () => {
 
 		for (const ext of textExtensions) {
 			it(`identifies ${ext} by extension with octet-stream fallback`, () => {
-				expect(mediaKind("application/octet-stream", `code.${ext}`)).toBe(
-					"text",
-				);
-				expect(mediaKind("binary/octet-stream", `code.${ext}`)).toBe(
-					"text",
-				);
+				expect(mediaKind("application/octet-stream", `code.${ext}`)).toBe("text");
+				expect(mediaKind("binary/octet-stream", `code.${ext}`)).toBe("text");
 				expect(mediaKind("", `code.${ext}`)).toBe("text");
 			});
 		}
@@ -219,15 +188,9 @@ describe("mediaKind", () => {
 
 	describe("unsupported and edge cases", () => {
 		it("returns unsupported for unknown binary files", () => {
-			expect(mediaKind("application/octet-stream", "archive.bin")).toBe(
-				"unsupported",
-			);
-			expect(mediaKind("application/octet-stream", "app.exe")).toBe(
-				"unsupported",
-			);
-			expect(mediaKind("application/x-custom", "file.xyz")).toBe(
-				"unsupported",
-			);
+			expect(mediaKind("application/octet-stream", "archive.bin")).toBe("unsupported");
+			expect(mediaKind("application/octet-stream", "app.exe")).toBe("unsupported");
+			expect(mediaKind("application/x-custom", "file.xyz")).toBe("unsupported");
 			expect(mediaKind("", "unknownfile")).toBe("unsupported");
 		});
 	});

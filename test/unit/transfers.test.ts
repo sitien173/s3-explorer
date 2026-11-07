@@ -16,8 +16,12 @@ function sender() {
 		sent: [] as { channel: string; payload: unknown }[],
 		destroyed: false,
 		listeners,
-		send(channel: string, payload: unknown) { this.sent.push({ channel, payload }); },
-		isDestroyed() { return this.destroyed; },
+		send(channel: string, payload: unknown) {
+			this.sent.push({ channel, payload });
+		},
+		isDestroyed() {
+			return this.destroyed;
+		},
 		once(event: "destroyed", listener: () => void) {
 			const list = listeners.get(event) ?? [];
 			list.push(listener);
@@ -70,20 +74,27 @@ function heldBody(content: string) {
 	};
 }
 
- describe("TransferManager", () => {
+describe("TransferManager", () => {
 	it("returns ids synchronously and sends the initial event for running and queued transfers", async () => {
 		let release!: () => void;
-		const runners: Partial<Runners> = { upload: () => new Promise<void>((resolve) => { release = resolve; }) };
+		const runners: Partial<Runners> = {
+			upload: () =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				}),
+		};
 		const manager = new TransferManager({ maxActive: 1, runners });
 		const owner = sender();
 		const first = manager.startUpload(input(owner, "first"));
 		const second = manager.startUpload(input(owner, "second"));
 		expect(typeof first).toBe("string");
 		expect(owner.sent.filter((event) => event.channel === events.transferProgress)).toHaveLength(2);
-		expect(owner.sent.map((event) => event.payload)).toEqual(expect.arrayContaining([
-			expect.objectContaining({ transferId: first, loaded: 0 }),
-			expect.objectContaining({ transferId: second, loaded: 0 }),
-		]));
+		expect(owner.sent.map((event) => event.payload)).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ transferId: first, loaded: 0 }),
+				expect.objectContaining({ transferId: second, loaded: 0 }),
+			]),
+		);
 		expect(manager.activeCount).toBe(1);
 		expect(manager.queuedCount).toBe(1);
 		release();
@@ -95,13 +106,18 @@ function heldBody(content: string) {
 		const started: string[] = [];
 		let active = 0;
 		let peak = 0;
-		const manager = new TransferManager({ maxActive, runners: { upload: async (transfer) => {
-			started.push(transfer.key);
-			active++;
-			peak = Math.max(peak, active);
-			await new Promise<void>((resolve) => setImmediate(resolve));
-			active--;
-		} } });
+		const manager = new TransferManager({
+			maxActive,
+			runners: {
+				upload: async (transfer) => {
+					started.push(transfer.key);
+					active++;
+					peak = Math.max(peak, active);
+					await new Promise<void>((resolve) => setImmediate(resolve));
+					active--;
+				},
+			},
+		});
 		const owner = sender();
 		for (let index = 0; index < 4; index++) manager.startUpload(input(owner, `k${index}`));
 		await waitFor(() => manager.size === 0);
@@ -114,12 +130,19 @@ function heldBody(content: string) {
 	it("cancels queued jobs and running jobs despite arbitrary runner rejection", async () => {
 		let release!: (error?: unknown) => void;
 		let started = 0;
-		const manager = new TransferManager({ maxActive: 1, runners: { upload: (_transfer, signal) => {
-			started++;
-			return new Promise<void>((_resolve, reject) => {
-				signal.addEventListener("abort", () => { release = reject; });
-			});
-		} } });
+		const manager = new TransferManager({
+			maxActive: 1,
+			runners: {
+				upload: (_transfer, signal) => {
+					started++;
+					return new Promise<void>((_resolve, reject) => {
+						signal.addEventListener("abort", () => {
+							release = reject;
+						});
+					});
+				},
+			},
+		});
 		const owner = sender();
 		const running = manager.startUpload(input(owner, "running"));
 		const queued = manager.startUpload(input(owner, "queued"));
@@ -130,7 +153,11 @@ function heldBody(content: string) {
 		await waitFor(() => manager.size === 0);
 		expect(started).toBe(1);
 		expect(owner.sent.filter((event) => event.channel === events.transferDone)).toHaveLength(2);
-		expect(owner.sent.filter((event) => event.channel === events.transferDone).map((event) => (event.payload as { status: string }).status)).toEqual(["cancelled", "cancelled"]);
+		expect(
+			owner.sent
+				.filter((event) => event.channel === events.transferDone)
+				.map((event) => (event.payload as { status: string }).status),
+		).toEqual(["cancelled", "cancelled"]);
 	});
 
 	it.each([
@@ -161,7 +188,13 @@ function heldBody(content: string) {
 	});
 
 	it("rejects foreign, unknown and finished cancellation; sends one terminal event and maps failure", async () => {
-		const manager = new TransferManager({ runners: { upload: async () => { throw Object.assign(new Error("AWS secret text"), { name: "AccessDenied" }); } } });
+		const manager = new TransferManager({
+			runners: {
+				upload: async () => {
+					throw Object.assign(new Error("AWS secret text"), { name: "AccessDenied" });
+				},
+			},
+		});
 		const owner = sender();
 		const foreign = sender();
 		const id = manager.startUpload(input(owner));
@@ -171,7 +204,10 @@ function heldBody(content: string) {
 		expect(await manager.cancel("unknown-id", owner)).toBe(false);
 		const done = owner.sent.filter((event) => event.channel === events.transferDone);
 		expect(done).toHaveLength(1);
-		expect(done[0]?.payload).toMatchObject({ status: "failed", error: { code: "ACCESS_DENIED", message: "Access denied" } });
+		expect(done[0]?.payload).toMatchObject({
+			status: "failed",
+			error: { code: "ACCESS_DENIED", message: "Access denied" },
+		});
 	});
 
 	it("throttles progress to at most one event per 100ms", async () => {
@@ -179,10 +215,16 @@ function heldBody(content: string) {
 		try {
 			let sendProgress!: (loaded: number, total: number) => void;
 			let finish!: () => void;
-			const manager = new TransferManager({ runners: { upload: (_transfer, _signal, progress) => {
-				sendProgress = progress;
-				return new Promise<void>((resolve) => { finish = resolve; });
-			} } });
+			const manager = new TransferManager({
+				runners: {
+					upload: (_transfer, _signal, progress) => {
+						sendProgress = progress;
+						return new Promise<void>((resolve) => {
+							finish = resolve;
+						});
+					},
+				},
+			});
 			const owner = sender();
 			manager.startUpload(input(owner));
 			sendProgress(1, 5);
@@ -193,7 +235,9 @@ function heldBody(content: string) {
 			finish();
 			await vi.runAllTicks();
 			await waitFor(() => manager.size === 0);
-		} finally { vi.useRealTimers(); }
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("cleans manager/listeners after completion, failure, cancellation, and destroy", async () => {
@@ -208,7 +252,17 @@ function heldBody(content: string) {
 
 		let sawSignal = false;
 		const destroyedSender = sender();
-		const destroyedManager = new TransferManager({ runners: { upload: (_transfer, signal) => new Promise<void>((_resolve, reject) => signal.addEventListener("abort", () => { sawSignal = true; reject(new Error("cancelled")); })) } });
+		const destroyedManager = new TransferManager({
+			runners: {
+				upload: (_transfer, signal) =>
+					new Promise<void>((_resolve, reject) =>
+						signal.addEventListener("abort", () => {
+							sawSignal = true;
+							reject(new Error("cancelled"));
+						}),
+					),
+			},
+		});
 		destroyedManager.startUpload(input(destroyedSender));
 		destroyedSender.destroyed = true;
 		for (const listener of [...(destroyedSender.listeners.get("destroyed") ?? [])]) listener();
@@ -220,7 +274,15 @@ function heldBody(content: string) {
 
 	it("removes queued entries on sender destroy without sending", async () => {
 		let release!: () => void;
-		const manager = new TransferManager({ maxActive: 1, runners: { upload: () => new Promise<void>((resolve) => { release = resolve; }) } });
+		const manager = new TransferManager({
+			maxActive: 1,
+			runners: {
+				upload: () =>
+					new Promise<void>((resolve) => {
+						release = resolve;
+					}),
+			},
+		});
 		const owner = sender();
 		manager.startUpload(input(owner, "active"));
 		manager.startUpload(input(owner, "waiting"));
@@ -272,9 +334,7 @@ function heldBody(content: string) {
 
 		await waitFor(() => manager.size === 0);
 
-		const done = owner.sent.filter(
-			(event) => event.channel === events.transferDone,
-		);
+		const done = owner.sent.filter((event) => event.channel === events.transferDone);
 		expect(done).toHaveLength(1);
 		expect(done[0]?.payload).toMatchObject({
 			transferId: id,
@@ -322,7 +382,7 @@ function heldBody(content: string) {
 	});
 });
 
- describe("default transfer runners", () => {
+describe("default transfer runners", () => {
 	it("redacts an upload local path from failed transfer events", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "transfer-upload-error-"));
 		try {
@@ -339,9 +399,7 @@ function heldBody(content: string) {
 			});
 			await waitFor(() => manager.size === 0);
 
-			const done = owner.sent.find(
-				(event) => event.channel === events.transferDone,
-			)?.payload as {
+			const done = owner.sent.find((event) => event.channel === events.transferDone)?.payload as {
 				status: string;
 				error?: { code: string; message: string };
 			};
@@ -381,9 +439,7 @@ function heldBody(content: string) {
 			});
 			await waitFor(() => manager.size === 0);
 
-			const done = owner.sent.find(
-				(event) => event.channel === events.transferDone,
-			)?.payload as {
+			const done = owner.sent.find((event) => event.channel === events.transferDone)?.payload as {
 				status: string;
 				error?: { code: string; message: string };
 			};
@@ -409,11 +465,15 @@ function heldBody(content: string) {
 			const body = Readable.from([Buffer.from("good")]);
 			const manager = new TransferManager();
 			const owner = sender();
-			const client = { send: async (command: unknown) => command instanceof GetObjectCommand ? { Body: body, ContentLength: 4 } : {} };
+			const client = {
+				send: async (command: unknown) => (command instanceof GetObjectCommand ? { Body: body, ContentLength: 4 } : {}),
+			};
 			manager.startDownload({ client: client as never, sender: owner, bucket: "bucket", key: "key", destPath });
 			await waitFor(() => manager.size === 0);
 			expect(await readFile(destPath, "utf8")).toBe("good");
-		} finally { await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	it.each(["short", "missing", "stream-error", "abort"])("cleans download temp output on %s", async (mode) => {
@@ -421,16 +481,45 @@ function heldBody(content: string) {
 		try {
 			const destPath = join(directory, "file");
 			const owner = sender();
-			const body = mode === "missing" ? undefined : mode === "short" ? Readable.from([Buffer.from("x")]) : new Readable({ read() { if (mode === "stream-error") this.destroy(new Error("stream failed")); } });
+			const body =
+				mode === "missing"
+					? undefined
+					: mode === "short"
+						? Readable.from([Buffer.from("x")])
+						: new Readable({
+								read() {
+									if (mode === "stream-error") this.destroy(new Error("stream failed"));
+								},
+							});
 			const client = { send: async () => ({ Body: body, ContentLength: mode === "short" ? 2 : undefined }) };
 			const manager = new TransferManager();
-			const id = manager.startDownload({ client: client as never, sender: owner, bucket: "bucket", key: "key", destPath });
+			const id = manager.startDownload({
+				client: client as never,
+				sender: owner,
+				bucket: "bucket",
+				key: "key",
+				destPath,
+			});
 			if (mode === "abort") await manager.cancel(id, owner);
 			await waitFor(() => manager.size === 0);
-			expect(await stat(`${destPath}.${id}.part`).then(() => true, () => false)).toBe(false);
-			expect(await stat(destPath + ".part").then(() => true, () => false)).toBe(false);
-			expect(owner.sent.filter((event) => event.channel === events.transferDone)[0]?.payload).toMatchObject({ status: mode === "abort" ? "cancelled" : "failed" });
-		} finally { await rm(directory, { recursive: true, force: true }); }
+			expect(
+				await stat(`${destPath}.${id}.part`).then(
+					() => true,
+					() => false,
+				),
+			).toBe(false);
+			expect(
+				await stat(`${destPath}.part`).then(
+					() => true,
+					() => false,
+				),
+			).toBe(false);
+			expect(owner.sent.filter((event) => event.channel === events.transferDone)[0]?.payload).toMatchObject({
+				status: mode === "abort" ? "cancelled" : "failed",
+			});
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	it("writes download to a unique part file per transfer and cleans it on failure", async () => {
@@ -459,20 +548,12 @@ function heldBody(content: string) {
 				destPath,
 			});
 			await streamStarted;
-			expect(
-				await stat(`${destPath}.${id}.part`).then(
-					() => true,
-					() => false,
-				),
-			).toBe(true);
+			const partPath = `${destPath}.${id}.part`;
+			await waitFor(() => existsSync(partPath));
+			expect(existsSync(partPath)).toBe(true);
 			body.destroy(new Error("fail"));
 			await waitFor(() => manager.size === 0);
-			expect(
-				await stat(`${destPath}.${id}.part`).then(
-					() => true,
-					() => false,
-				),
-			).toBe(false);
+			expect(existsSync(partPath)).toBe(false);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -519,9 +600,7 @@ function heldBody(content: string) {
 			const secondPartPath = `${destPath}.${secondId}.part`;
 
 			await Promise.all([firstBody.started, secondBody.started]);
-			await waitFor(
-				() => existsSync(firstPartPath) && existsSync(secondPartPath),
-			);
+			await waitFor(() => existsSync(firstPartPath) && existsSync(secondPartPath));
 			expect(firstPartPath).not.toBe(secondPartPath);
 			expect(manager.activeCount).toBe(2);
 			expect(await stat(firstPartPath)).toBeDefined();
@@ -534,9 +613,7 @@ function heldBody(content: string) {
 			secondBody.release();
 			await waitFor(() => manager.size === 0);
 			expect(await readFile(destPath, "utf8")).toBe("second payload");
-			const doneEvents = owner.sent.filter(
-				(event) => event.channel === events.transferDone,
-			);
+			const doneEvents = owner.sent.filter((event) => event.channel === events.transferDone);
 			expect(doneEvents).toHaveLength(2);
 			expect(doneEvents[0]?.payload).toMatchObject({
 				transferId: firstId,
@@ -589,9 +666,7 @@ function heldBody(content: string) {
 			const secondPartPath = `${secondDestPath}.${secondId}.part`;
 
 			await Promise.all([firstBody.started, secondBody.started]);
-			await waitFor(
-				() => existsSync(firstPartPath) && existsSync(secondPartPath),
-			);
+			await waitFor(() => existsSync(firstPartPath) && existsSync(secondPartPath));
 			expect(firstPartPath).not.toBe(secondPartPath);
 			expect(manager.activeCount).toBe(2);
 
@@ -634,10 +709,11 @@ function heldBody(content: string) {
 					localPath,
 				});
 				await waitFor(() => manager.size === 0);
-				expect(owner.sent.filter((event) => event.channel === events.transferDone)[0]?.payload).toMatchObject({ status: "completed" });
+				expect(owner.sent.filter((event) => event.channel === events.transferDone)[0]?.payload).toMatchObject({
+					status: "completed",
+				});
 				const putObjects = commands.filter(
-					(command): command is PutObjectCommand =>
-						command instanceof PutObjectCommand,
+					(command): command is PutObjectCommand => command instanceof PutObjectCommand,
 				);
 				expect(putObjects).toHaveLength(1);
 				expect(putObjects[0]?.input).toMatchObject({
@@ -647,6 +723,8 @@ function heldBody(content: string) {
 				});
 				expect(putObjects[0]?.input.Body).toBeDefined();
 			}
-		} finally { await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 });

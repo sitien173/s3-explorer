@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { SecretVault, type ManualSecret } from "./secrets";
+import type { SecretVault, ManualSecret } from "./secrets";
 export type ConnectionView = {
 	id: string;
 	name: string;
@@ -56,16 +56,13 @@ export class ConnectionStore {
 		const secret = r.kind === "manual" ? await this.vault.get(r.id) : undefined;
 		return {
 			...r,
-			sessionOnly:
-				r.kind === "manual" && Boolean(secret) && !(await this.persisted(r.id)),
+			sessionOnly: r.kind === "manual" && Boolean(secret) && !(await this.persisted(r.id)),
 			hasSecret: r.kind === "profile" || Boolean(secret),
 		};
 	}
 	private async persisted(id: string) {
 		try {
-			const data = JSON.parse(
-				await readFile(join(this.directory, "secrets.json"), "utf8"),
-			) as Record<string, string>;
+			const data = JSON.parse(await readFile(join(this.directory, "secrets.json"), "utf8")) as Record<string, string>;
 			return Boolean(data[id]);
 		} catch {
 			return false;
@@ -79,8 +76,7 @@ export class ConnectionStore {
 		return r ? this.view(r) : undefined;
 	}
 	async create(input: Create) {
-		const { accessKeyId, secretAccessKey, sessionToken, ...rest } =
-			input as Create & ManualSecret;
+		const { accessKeyId, secretAccessKey, sessionToken, ...rest } = input as Create & ManualSecret;
 		const row: RecordType = {
 			id: crypto.randomUUID(),
 			...rest,
@@ -102,8 +98,8 @@ export class ConnectionStore {
 		const i = rows.findIndex((x) => x.id === id);
 		if (i < 0) return undefined;
 
-		const { accessKeyId, secretAccessKey, sessionToken, ...fields } =
-			patch as Partial<ManualSecret> & Record<string, unknown>;
+		const { accessKeyId, secretAccessKey, sessionToken, ...fields } = patch as Partial<ManualSecret> &
+			Record<string, unknown>;
 		const { region, endpoint, ...recordFields } = fields;
 		const current = rows[i];
 		let nextSecret: ManualSecret | undefined;

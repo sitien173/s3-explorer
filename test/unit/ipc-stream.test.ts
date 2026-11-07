@@ -4,16 +4,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HandleRegistry } from "../../src/main/stream/handles";
 import { ConnectionStore } from "../../src/main/connections/store";
-import {
-	SecretVault,
-	type SecretCipher,
-} from "../../src/main/connections/secrets";
+import { SecretVault, type SecretCipher } from "../../src/main/connections/secrets";
 import { S3ClientFactory } from "../../src/main/s3/client";
-import {
-	register,
-	type IpcMainLike,
-	type SenderLike,
-} from "../../src/main/ipc/register";
+import { register, type IpcMainLike, type SenderLike } from "../../src/main/ipc/register";
 import { assertNoSecrets } from "./secret-scan";
 
 type Listener = Parameters<IpcMainLike["handle"]>[1];
@@ -73,8 +66,7 @@ describe("stream IPC", () => {
 		connectionId = connection.id;
 
 		const proxy = {
-			urlFor: (handle: string) =>
-				`http://127.0.0.1:44444/o/${handle}?t=${proxyToken}`,
+			urlFor: (handle: string) => `http://127.0.0.1:44444/o/${handle}?t=${proxyToken}`,
 			describe: async (handle: string) => {
 				describedHandles.push(handle);
 				return { contentType: "video/mp4", size: 1234 };
@@ -95,10 +87,7 @@ describe("stream IPC", () => {
 		const ipcMain: IpcMainLike = {
 			handle: (channel, listener) => registered.set(channel, listener),
 		};
-		register(
-			ipcMain,
-			deps as unknown as Parameters<typeof register>[1],
-		);
+		register(ipcMain, deps as unknown as Parameters<typeof register>[1]);
 		return registered;
 	}
 
@@ -140,9 +129,7 @@ describe("stream IPC", () => {
 		expect(result).toEqual({
 			ok: true,
 			data: {
-				url: expect.stringMatching(
-					/^http:\/\/127\.0\.0\.1:44444\/o\/[0-9a-f]{32}\?t=[0-9a-f]{64}$/,
-				),
+				url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:44444\/o\/[0-9a-f]{32}\?t=[0-9a-f]{64}$/),
 				contentType: "video/mp4",
 				size: 1234,
 			},

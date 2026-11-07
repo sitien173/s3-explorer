@@ -19,7 +19,7 @@ export class SecretVault {
 	private readonly file: string;
 
 	constructor(
-		private readonly directory: string,
+		directory: string,
 		private readonly cipher: SecretCipher,
 	) {
 		this.file = join(directory, "secrets.json");
@@ -28,9 +28,7 @@ export class SecretVault {
 	private allowed() {
 		return (
 			this.cipher.isEncryptionAvailable() &&
-			!["basic_text", "unknown"].includes(
-				this.cipher.getSelectedStorageBackend(),
-			)
+			!["basic_text", "unknown"].includes(this.cipher.getSelectedStorageBackend())
 		);
 	}
 
@@ -38,15 +36,10 @@ export class SecretVault {
 		if (this.memory.has(id)) return this.memory.get(id);
 		if (!this.allowed()) return undefined;
 		try {
-			const data = JSON.parse(await readFile(this.file, "utf8")) as Record<
-				string,
-				string
-			>;
+			const data = JSON.parse(await readFile(this.file, "utf8")) as Record<string, string>;
 			const encoded = data[id];
 			if (!encoded) return undefined;
-			const secret = JSON.parse(
-				this.cipher.decryptString(Buffer.from(encoded, "base64")),
-			) as ManualSecret;
+			const secret = JSON.parse(this.cipher.decryptString(Buffer.from(encoded, "base64"))) as ManualSecret;
 			this.memory.set(id, secret);
 			return secret;
 		} catch {
@@ -60,9 +53,7 @@ export class SecretVault {
 
 		try {
 			const data = await this.read();
-			data[id] = this.cipher
-				.encryptString(JSON.stringify(secret))
-				.toString("base64");
+			data[id] = this.cipher.encryptString(JSON.stringify(secret)).toString("base64");
 			await this.write(data);
 			return true;
 		} catch {
@@ -82,10 +73,7 @@ export class SecretVault {
 
 	private async read(): Promise<Record<string, string>> {
 		try {
-			return JSON.parse(await readFile(this.file, "utf8")) as Record<
-				string,
-				string
-			>;
+			return JSON.parse(await readFile(this.file, "utf8")) as Record<string, string>;
 		} catch {
 			return {};
 		}

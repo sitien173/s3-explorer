@@ -9,8 +9,7 @@ const connections: Api["connections"] = {
 	delete: (input) => ipcRenderer.invoke(channels.delete, input),
 	testConnection: (input) => ipcRenderer.invoke(channels.testConnection, input),
 	ssoLogin: (input) => ipcRenderer.invoke(channels.ssoLogin, input),
-	listProfiles: (input = {}) =>
-		ipcRenderer.invoke(channels.listProfiles, input),
+	listProfiles: (input = {}) => ipcRenderer.invoke(channels.listProfiles, input),
 };
 
 const buckets: Api["buckets"] = {
@@ -26,10 +25,7 @@ const objects: Api["objects"] = {
 	list: (input) => ipcRenderer.invoke(channels.objectsList, input),
 };
 
-function subscribe<T>(
-	eventChannel: string,
-	listener: (payload: T) => void,
-): () => void {
+function subscribe<T>(eventChannel: string, listener: (payload: T) => void): () => void {
 	const wrapper = (_event: unknown, payload: T) => {
 		listener(payload);
 	};
@@ -59,16 +55,13 @@ const ops: Api["ops"] = {
 
 const transfers: Api["transfers"] = {
 	upload: (input) => ipcRenderer.invoke(channels.transfersUpload, input),
-	uploadPaths: (input) =>
-		ipcRenderer.invoke(channels.transfersUploadPaths, input),
+	uploadPaths: (input) => ipcRenderer.invoke(channels.transfersUploadPaths, input),
 	download: (input) => ipcRenderer.invoke(channels.transfersDownload, input),
 	cancel: (input) => ipcRenderer.invoke(channels.transfersCancel, input),
 	onProgress: (listener) => subscribe(events.transferProgress, listener),
 	onDone: (listener) => subscribe(events.transferDone, listener),
 	pathsForFiles: (files) =>
-		files
-			.map((file) => webUtils.getPathForFile(file as File))
-			.filter((path) => path.length > 0),
+		files.map((file) => webUtils.getPathForFile(file as File)).filter((path) => path.length > 0),
 };
 
 const stream: Api["stream"] = {
@@ -77,8 +70,7 @@ const stream: Api["stream"] = {
 };
 
 const files: Api["files"] = {
-	openWithSystemApp: (input) =>
-		ipcRenderer.invoke(channels.filesOpenWithSystemApp, input),
+	openWithSystemApp: (input) => ipcRenderer.invoke(channels.filesOpenWithSystemApp, input),
 };
 
 const api: Api = Object.freeze({

@@ -6,10 +6,7 @@ export type ProfileInfo = {
 	endpointUrl?: string;
 	kind: "sso" | "static" | "other";
 };
-export async function listProfiles(
-	configFilepath?: string,
-	credentialsFilepath?: string,
-): Promise<ProfileInfo[]> {
+export async function listProfiles(configFilepath?: string, credentialsFilepath?: string): Promise<ProfileInfo[]> {
 	const files = await loadSharedConfigFiles({
 		...(configFilepath ? { configFilepath } : {}),
 		...(credentialsFilepath ? { filepath: credentialsFilepath } : {}),
@@ -37,9 +34,6 @@ export async function listProfiles(
 		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function getProfileEndpointUrl(
-	profileName: string,
-): Promise<string | undefined> {
-	return (await listProfiles()).find((profile) => profile.name === profileName)
-		?.endpointUrl;
+export async function getProfileEndpointUrl(profileName: string): Promise<string | undefined> {
+	return (await listProfiles()).find((profile) => profile.name === profileName)?.endpointUrl;
 }

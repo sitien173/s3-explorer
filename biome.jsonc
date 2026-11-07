@@ -1,0 +1,93 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
+	"vcs": { "enabled": false },
+	"files": {
+		"includes": [
+			"src/**/*.{ts,tsx,css}",
+			"test/**/*.{ts,tsx}",
+			"e2e/**/*.ts",
+			"scripts/**/*.ts",
+			"electron.vite.config.ts",
+			"vitest.config.ts",
+			"playwright.config.ts",
+			"biome.jsonc",
+			"!**/out",
+			"!**/dist",
+			"!**/build",
+			"!**/node_modules",
+			"!**/test-results",
+			"!**/docs",
+			"!**/*.tsbuildinfo",
+			"!**/pnpm-lock.yaml"
+		]
+	},
+	"formatter": { "enabled": true, "indentStyle": "tab", "lineWidth": 120 },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"suspicious": {
+				// Pervasive in mocks and IPC test doubles; typing them is out of scope for a no-behavior-change phase.
+				"noExplicitAny": "off",
+				// Exports from test modules are shared helpers; moving them is a refactor.
+				"noExportsInTest": "off",
+				// Static five-item skeleton list; index is the only stable key.
+				"noArrayIndexKey": "off",
+				// @ts-expect-error is not equivalent for the cross-project import in test/unit/selection.test.ts (TS2578).
+				"noTsIgnore": "off",
+				// Test-only forEach with expression bodies; rewriting is cosmetic.
+				"useIterableCallbackReturn": "off"
+			},
+			"style": {
+				// Pervasive; replacing "!" with guards changes runtime control flow.
+				"noNonNullAssertion": "off"
+			},
+			"a11y": {
+				// ARIA roles on virtualized div rows, aside, and wrappers; native elements would change layout and accessible roles.
+				"useSemanticElements": "off"
+			},
+			"complexity": {
+				// Math.min/max rewrite is not provably identical for NaN and mixed inputs.
+				"useMathMinMax": "off"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["src/renderer/src/components/ObjectTable.tsx"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						// Grid rows and column headers are focus-managed by the table container, not tabbable.
+						"useFocusableInteractive": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["src/renderer/src/components/ui/label.tsx", "src/renderer/src/components/ui/field.tsx"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						// Label wrappers in ui/ receive htmlFor from callers.
+						"noLabelWithoutControl": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["test/**"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						// Test doubles render bare buttons outside any form.
+						"useButtonType": "off"
+					}
+				}
+			}
+		}
+	],
+	"assist": { "actions": { "source": { "organizeImports": "off" } } },
+	"javascript": { "formatter": { "quoteStyle": "double" } },
+	"css": { "parser": { "tailwindDirectives": true } }
+}

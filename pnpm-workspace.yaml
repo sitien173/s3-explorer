@@ -4,12 +4,26 @@ allowBuilds:
   electron: true
   esbuild: false
   sharp: false
-  '@swc/core': false
+  "@swc/core": false
   core-js: false
   electron-winstaller: false
 minimumReleaseAgeExclude:
-  - '@vitest/mocker@5.1.0'
-  - '@vitest/spy@5.1.0'
+  - "@vitest/mocker@5.1.0"
+  - "@vitest/spy@5.1.0"
   - vitest@5.1.0
   - lucide-react@1.68.0
   - react-resizable-panels@4.18.1
+  - "@biomejs/biome@2.6.6"
+  - "@biomejs/cli-android-arm64@2.6.6"
+  - "@biomejs/cli-android-x64@2.6.6"
+  - "@biomejs/cli-darwin-arm64@2.6.6"
+  - "@biomejs/cli-darwin-x64@2.6.6"
+  - "@biomejs/cli-linux-arm64-musl@2.6.6"
+  - "@biomejs/cli-linux-arm64@2.6.6"
+  - "@biomejs/cli-linux-x64-musl@2.6.6"
+  - "@biomejs/cli-linux-x64@2.6.6"
+  - "@biomejs/cli-win32-arm64@2.6.6"
+  - "@biomejs/cli-win32-x64@2.6.6"
+  - '@tanstack/query-core@5.107.1'
+  - '@tanstack/react-query@5.107.1'
+  - zustand@5.1.0

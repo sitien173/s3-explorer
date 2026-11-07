@@ -17,9 +17,7 @@ const common = {
 	forcePathStyle: z.boolean().default(false),
 };
 
-const bucketName = z
-	.string()
-	.regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/);
+const bucketName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/);
 export const createBucketName = z
 	.string()
 	.min(3)
@@ -246,18 +244,14 @@ const s3Object = z
 	})
 	.strict();
 
-const bucketMutationResult = z
-	.object({ bucket: z.string(), warning: z.string().optional() })
-	.strict();
+const bucketMutationResult = z.object({ bucket: z.string(), warning: z.string().optional() }).strict();
 
 export const responseSchemas = {
 	[channels.list]: z.array(connection),
 	[channels.create]: connection,
 	[channels.update]: connection,
 	[channels.delete]: z.object({ deleted: z.boolean() }).strict(),
-	[channels.testConnection]: z
-		.object({ bucketCount: z.number().int().nonnegative() })
-		.strict(),
+	[channels.testConnection]: z.object({ bucketCount: z.number().int().nonnegative() }).strict(),
 	[channels.ssoLogin]: z.object({ loggedIn: z.boolean() }).strict(),
 	[channels.listProfiles]: z.array(profile),
 	[channels.bucketsList]: z
@@ -303,9 +297,7 @@ export const responseSchemas = {
 			error: errorSchema.optional(),
 		})
 		.strict(),
-	[channels.opsCountPrefix]: z
-		.object({ count: z.number().int().nonnegative() })
-		.strict(),
+	[channels.opsCountPrefix]: z.object({ count: z.number().int().nonnegative() }).strict(),
 	[channels.opsRename]: z.object({ key: objectKey }).strict(),
 	[channels.opsRenamePrefix]: z
 		.object({
@@ -314,18 +306,14 @@ export const responseSchemas = {
 			error: errorSchema.optional(),
 		})
 		.strict(),
-	[channels.transfersUpload]: z
-		.object({ transferIds: z.array(z.string()) })
-		.strict(),
+	[channels.transfersUpload]: z.object({ transferIds: z.array(z.string()) }).strict(),
 	[channels.transfersUploadPaths]: z
 		.object({
 			transferIds: z.array(z.string()),
 			rejectedCount: z.number().int().nonnegative(),
 		})
 		.strict(),
-	[channels.transfersDownload]: z
-		.object({ transferId: z.string().nullable() })
-		.strict(),
+	[channels.transfersDownload]: z.object({ transferId: z.string().nullable() }).strict(),
 	[channels.transfersCancel]: z.object({ cancelled: z.boolean() }).strict(),
 	[channels.streamOpen]: z
 		.object({
@@ -418,177 +406,67 @@ export type ListRequest = z.infer<(typeof schemas)[typeof channels.list]>;
 export type CreateRequest = z.infer<(typeof schemas)[typeof channels.create]>;
 export type UpdateRequest = z.infer<(typeof schemas)[typeof channels.update]>;
 export type DeleteRequest = z.infer<(typeof schemas)[typeof channels.delete]>;
-export type TestConnectionRequest = z.infer<
-	(typeof schemas)[typeof channels.testConnection]
->;
-export type SsoLoginRequest = z.infer<
-	(typeof schemas)[typeof channels.ssoLogin]
->;
-export type ListProfilesRequest = z.infer<
-	(typeof schemas)[typeof channels.listProfiles]
->;
-export type BucketsListRequest = z.infer<
-	(typeof schemas)[typeof channels.bucketsList]
->;
-export type BucketsPinRequest = z.infer<
-	(typeof schemas)[typeof channels.bucketsPin]
->;
-export type BucketsUnpinRequest = z.infer<
-	(typeof schemas)[typeof channels.bucketsUnpin]
->;
-export type BucketsAddRequest = z.infer<
-	(typeof schemas)[typeof channels.bucketsAdd]
->;
-export type BucketsCreateRequest = z.infer<
-	(typeof schemas)[typeof channels.bucketsCreate]
->;
-export type BucketsDeleteRequest = z.infer<
-	(typeof schemas)[typeof channels.bucketsDelete]
->;
-export type ObjectsListRequest = z.infer<
-	(typeof schemas)[typeof channels.objectsList]
->;
-export type SearchStartRequest = z.infer<
-	(typeof schemas)[typeof channels.searchStart]
->;
-export type SearchCancelRequest = z.infer<
-	(typeof schemas)[typeof channels.searchCancel]
->;
-export type OpsCreateFolderRequest = z.infer<
-	(typeof schemas)[typeof channels.opsCreateFolder]
->;
-export type OpsDeleteRequest = z.infer<
-	(typeof schemas)[typeof channels.opsDelete]
->;
-export type OpsDeletePrefixRequest = z.infer<
-	(typeof schemas)[typeof channels.opsDeletePrefix]
->;
-export type OpsCountPrefixRequest = z.infer<
-	(typeof schemas)[typeof channels.opsCountPrefix]
->;
-export type OpsRenameRequest = z.infer<
-	(typeof schemas)[typeof channels.opsRename]
->;
-export type OpsRenamePrefixRequest = z.infer<
-	(typeof schemas)[typeof channels.opsRenamePrefix]
->;
-export type TransfersUploadRequest = z.infer<
-	(typeof schemas)[typeof channels.transfersUpload]
->;
-export type TransfersUploadPathsRequest = z.infer<
-	(typeof schemas)[typeof channels.transfersUploadPaths]
->;
-export type TransfersDownloadRequest = z.infer<
-	(typeof schemas)[typeof channels.transfersDownload]
->;
-export type TransfersCancelRequest = z.infer<
-	(typeof schemas)[typeof channels.transfersCancel]
->;
-export type StreamOpenRequest = z.infer<
-	(typeof schemas)[typeof channels.streamOpen]
->;
-export type StreamOpenUrlRequest = z.infer<
-	(typeof schemas)[typeof channels.streamOpenUrl]
->;
-export type FilesOpenWithSystemAppRequest = z.infer<
-	(typeof schemas)[typeof channels.filesOpenWithSystemApp]
->;
+export type TestConnectionRequest = z.infer<(typeof schemas)[typeof channels.testConnection]>;
+export type SsoLoginRequest = z.infer<(typeof schemas)[typeof channels.ssoLogin]>;
+export type ListProfilesRequest = z.infer<(typeof schemas)[typeof channels.listProfiles]>;
+export type BucketsListRequest = z.infer<(typeof schemas)[typeof channels.bucketsList]>;
+export type BucketsPinRequest = z.infer<(typeof schemas)[typeof channels.bucketsPin]>;
+export type BucketsUnpinRequest = z.infer<(typeof schemas)[typeof channels.bucketsUnpin]>;
+export type BucketsAddRequest = z.infer<(typeof schemas)[typeof channels.bucketsAdd]>;
+export type BucketsCreateRequest = z.infer<(typeof schemas)[typeof channels.bucketsCreate]>;
+export type BucketsDeleteRequest = z.infer<(typeof schemas)[typeof channels.bucketsDelete]>;
+export type ObjectsListRequest = z.infer<(typeof schemas)[typeof channels.objectsList]>;
+export type SearchStartRequest = z.infer<(typeof schemas)[typeof channels.searchStart]>;
+export type SearchCancelRequest = z.infer<(typeof schemas)[typeof channels.searchCancel]>;
+export type OpsCreateFolderRequest = z.infer<(typeof schemas)[typeof channels.opsCreateFolder]>;
+export type OpsDeleteRequest = z.infer<(typeof schemas)[typeof channels.opsDelete]>;
+export type OpsDeletePrefixRequest = z.infer<(typeof schemas)[typeof channels.opsDeletePrefix]>;
+export type OpsCountPrefixRequest = z.infer<(typeof schemas)[typeof channels.opsCountPrefix]>;
+export type OpsRenameRequest = z.infer<(typeof schemas)[typeof channels.opsRename]>;
+export type OpsRenamePrefixRequest = z.infer<(typeof schemas)[typeof channels.opsRenamePrefix]>;
+export type TransfersUploadRequest = z.infer<(typeof schemas)[typeof channels.transfersUpload]>;
+export type TransfersUploadPathsRequest = z.infer<(typeof schemas)[typeof channels.transfersUploadPaths]>;
+export type TransfersDownloadRequest = z.infer<(typeof schemas)[typeof channels.transfersDownload]>;
+export type TransfersCancelRequest = z.infer<(typeof schemas)[typeof channels.transfersCancel]>;
+export type StreamOpenRequest = z.infer<(typeof schemas)[typeof channels.streamOpen]>;
+export type StreamOpenUrlRequest = z.infer<(typeof schemas)[typeof channels.streamOpenUrl]>;
+export type FilesOpenWithSystemAppRequest = z.infer<(typeof schemas)[typeof channels.filesOpenWithSystemApp]>;
 
-export type ListResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.list]
->;
-export type CreateResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.create]
->;
-export type UpdateResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.update]
->;
-export type DeleteResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.delete]
->;
-export type TestConnectionResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.testConnection]
->;
-export type SsoLoginResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.ssoLogin]
->;
-export type ListProfilesResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.listProfiles]
->;
-export type BucketsListResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.bucketsList]
->;
-export type BucketsPinResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.bucketsPin]
->;
-export type BucketsUnpinResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.bucketsUnpin]
->;
-export type BucketsAddResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.bucketsAdd]
->;
-export type BucketsCreateResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.bucketsCreate]
->;
-export type BucketsDeleteResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.bucketsDelete]
->;
-export type ObjectsListResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.objectsList]
->;
-export type SearchStartResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.searchStart]
->;
-export type SearchCancelResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.searchCancel]
->;
-export type OpsCreateFolderResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.opsCreateFolder]
->;
-export type OpsDeleteResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.opsDelete]
->;
-export type OpsDeletePrefixResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.opsDeletePrefix]
->;
-export type OpsCountPrefixResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.opsCountPrefix]
->;
-export type OpsRenameResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.opsRename]
->;
-export type OpsRenamePrefixResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.opsRenamePrefix]
->;
-export type TransfersUploadResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.transfersUpload]
->;
-export type TransfersUploadPathsResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.transfersUploadPaths]
->;
-export type TransfersDownloadResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.transfersDownload]
->;
-export type TransfersCancelResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.transfersCancel]
->;
-export type StreamOpenResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.streamOpen]
->;
-export type StreamOpenUrlResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.streamOpenUrl]
->;
-export type FilesOpenWithSystemAppResponse = z.infer<
-	(typeof responseSchemas)[typeof channels.filesOpenWithSystemApp]
->;
+export type ListResponse = z.infer<(typeof responseSchemas)[typeof channels.list]>;
+export type CreateResponse = z.infer<(typeof responseSchemas)[typeof channels.create]>;
+export type UpdateResponse = z.infer<(typeof responseSchemas)[typeof channels.update]>;
+export type DeleteResponse = z.infer<(typeof responseSchemas)[typeof channels.delete]>;
+export type TestConnectionResponse = z.infer<(typeof responseSchemas)[typeof channels.testConnection]>;
+export type SsoLoginResponse = z.infer<(typeof responseSchemas)[typeof channels.ssoLogin]>;
+export type ListProfilesResponse = z.infer<(typeof responseSchemas)[typeof channels.listProfiles]>;
+export type BucketsListResponse = z.infer<(typeof responseSchemas)[typeof channels.bucketsList]>;
+export type BucketsPinResponse = z.infer<(typeof responseSchemas)[typeof channels.bucketsPin]>;
+export type BucketsUnpinResponse = z.infer<(typeof responseSchemas)[typeof channels.bucketsUnpin]>;
+export type BucketsAddResponse = z.infer<(typeof responseSchemas)[typeof channels.bucketsAdd]>;
+export type BucketsCreateResponse = z.infer<(typeof responseSchemas)[typeof channels.bucketsCreate]>;
+export type BucketsDeleteResponse = z.infer<(typeof responseSchemas)[typeof channels.bucketsDelete]>;
+export type ObjectsListResponse = z.infer<(typeof responseSchemas)[typeof channels.objectsList]>;
+export type SearchStartResponse = z.infer<(typeof responseSchemas)[typeof channels.searchStart]>;
+export type SearchCancelResponse = z.infer<(typeof responseSchemas)[typeof channels.searchCancel]>;
+export type OpsCreateFolderResponse = z.infer<(typeof responseSchemas)[typeof channels.opsCreateFolder]>;
+export type OpsDeleteResponse = z.infer<(typeof responseSchemas)[typeof channels.opsDelete]>;
+export type OpsDeletePrefixResponse = z.infer<(typeof responseSchemas)[typeof channels.opsDeletePrefix]>;
+export type OpsCountPrefixResponse = z.infer<(typeof responseSchemas)[typeof channels.opsCountPrefix]>;
+export type OpsRenameResponse = z.infer<(typeof responseSchemas)[typeof channels.opsRename]>;
+export type OpsRenamePrefixResponse = z.infer<(typeof responseSchemas)[typeof channels.opsRenamePrefix]>;
+export type TransfersUploadResponse = z.infer<(typeof responseSchemas)[typeof channels.transfersUpload]>;
+export type TransfersUploadPathsResponse = z.infer<(typeof responseSchemas)[typeof channels.transfersUploadPaths]>;
+export type TransfersDownloadResponse = z.infer<(typeof responseSchemas)[typeof channels.transfersDownload]>;
+export type TransfersCancelResponse = z.infer<(typeof responseSchemas)[typeof channels.transfersCancel]>;
+export type StreamOpenResponse = z.infer<(typeof responseSchemas)[typeof channels.streamOpen]>;
+export type StreamOpenUrlResponse = z.infer<(typeof responseSchemas)[typeof channels.streamOpenUrl]>;
+export type FilesOpenWithSystemAppResponse = z.infer<(typeof responseSchemas)[typeof channels.filesOpenWithSystemApp]>;
 
 export type SearchBatchPayload = z.infer<typeof searchBatchPayloadSchema>;
 export type SearchProgressPayload = z.infer<typeof searchProgressPayloadSchema>;
 export type SearchDonePayload = z.infer<typeof searchDonePayloadSchema>;
 export type OpsProgressPayload = z.infer<typeof opsProgressPayloadSchema>;
-export type TransferProgressPayload = z.infer<
-	typeof transferProgressPayloadSchema
->;
+export type TransferProgressPayload = z.infer<typeof transferProgressPayloadSchema>;
 export type TransferDonePayload = z.infer<typeof transferDonePayloadSchema>;
 
 export type IpcError = z.infer<typeof errorSchema>;
@@ -675,87 +553,51 @@ export type Api = {
 		create: (input: CreateRequest) => Promise<Result<CreateResponse>>;
 		update: (input: UpdateRequest) => Promise<Result<UpdateResponse>>;
 		delete: (input: DeleteRequest) => Promise<Result<DeleteResponse>>;
-		testConnection: (
-			input: TestConnectionRequest,
-		) => Promise<Result<TestConnectionResponse>>;
+		testConnection: (input: TestConnectionRequest) => Promise<Result<TestConnectionResponse>>;
 		ssoLogin: (input: SsoLoginRequest) => Promise<Result<SsoLoginResponse>>;
-		listProfiles: (
-			input?: ListProfilesRequest,
-		) => Promise<Result<ListProfilesResponse>>;
+		listProfiles: (input?: ListProfilesRequest) => Promise<Result<ListProfilesResponse>>;
 	};
 	buckets: {
 		list: (input: BucketsListRequest) => Promise<Result<BucketsListResponse>>;
 		pin: (input: BucketsPinRequest) => Promise<Result<BucketsPinResponse>>;
-		unpin: (
-			input: BucketsUnpinRequest,
-		) => Promise<Result<BucketsUnpinResponse>>;
+		unpin: (input: BucketsUnpinRequest) => Promise<Result<BucketsUnpinResponse>>;
 		add: (input: BucketsAddRequest) => Promise<Result<BucketsAddResponse>>;
-		create: (
-			input: BucketsCreateRequest,
-		) => Promise<Result<BucketsCreateResponse>>;
-		delete: (
-			input: BucketsDeleteRequest,
-		) => Promise<Result<BucketsDeleteResponse>>;
+		create: (input: BucketsCreateRequest) => Promise<Result<BucketsCreateResponse>>;
+		delete: (input: BucketsDeleteRequest) => Promise<Result<BucketsDeleteResponse>>;
 	};
 	objects: {
 		list: (input: ObjectsListRequest) => Promise<Result<ObjectsListResponse>>;
 	};
 	search: {
 		start: (input: SearchStartRequest) => Promise<Result<SearchStartResponse>>;
-		cancel: (
-			input: SearchCancelRequest,
-		) => Promise<Result<SearchCancelResponse>>;
+		cancel: (input: SearchCancelRequest) => Promise<Result<SearchCancelResponse>>;
 		onBatch: (listener: (payload: SearchBatchPayload) => void) => () => void;
-		onProgress: (
-			listener: (payload: SearchProgressPayload) => void,
-		) => () => void;
+		onProgress: (listener: (payload: SearchProgressPayload) => void) => () => void;
 		onDone: (listener: (payload: SearchDonePayload) => void) => () => void;
 	};
 	ops: {
-		createFolder: (
-			input: OpsCreateFolderRequest,
-		) => Promise<Result<OpsCreateFolderResponse>>;
+		createFolder: (input: OpsCreateFolderRequest) => Promise<Result<OpsCreateFolderResponse>>;
 		delete: (input: OpsDeleteRequest) => Promise<Result<OpsDeleteResponse>>;
-		deletePrefix: (
-			input: OpsDeletePrefixRequest,
-		) => Promise<Result<OpsDeletePrefixResponse>>;
-		countPrefix: (
-			input: OpsCountPrefixRequest,
-		) => Promise<Result<OpsCountPrefixResponse>>;
+		deletePrefix: (input: OpsDeletePrefixRequest) => Promise<Result<OpsDeletePrefixResponse>>;
+		countPrefix: (input: OpsCountPrefixRequest) => Promise<Result<OpsCountPrefixResponse>>;
 		rename: (input: OpsRenameRequest) => Promise<Result<OpsRenameResponse>>;
-		renamePrefix: (
-			input: OpsRenamePrefixRequest,
-		) => Promise<Result<OpsRenamePrefixResponse>>;
+		renamePrefix: (input: OpsRenamePrefixRequest) => Promise<Result<OpsRenamePrefixResponse>>;
 		onProgress: (listener: (payload: OpsProgressPayload) => void) => () => void;
 	};
 	stream: {
 		open: (input: StreamOpenRequest) => Promise<Result<StreamOpenResponse>>;
-		openUrl: (
-			input: StreamOpenUrlRequest,
-		) => Promise<Result<StreamOpenUrlResponse>>;
+		openUrl: (input: StreamOpenUrlRequest) => Promise<Result<StreamOpenUrlResponse>>;
 	};
 	transfers: {
-		upload: (
-			input: TransfersUploadRequest,
-		) => Promise<Result<TransfersUploadResponse>>;
-		uploadPaths: (
-			input: TransfersUploadPathsRequest,
-		) => Promise<Result<TransfersUploadPathsResponse>>;
-		download: (
-			input: TransfersDownloadRequest,
-		) => Promise<Result<TransfersDownloadResponse>>;
-		cancel: (
-			input: TransfersCancelRequest,
-		) => Promise<Result<TransfersCancelResponse>>;
-		onProgress: (
-			listener: (payload: TransferProgressPayload) => void,
-		) => () => void;
+		upload: (input: TransfersUploadRequest) => Promise<Result<TransfersUploadResponse>>;
+		uploadPaths: (input: TransfersUploadPathsRequest) => Promise<Result<TransfersUploadPathsResponse>>;
+		download: (input: TransfersDownloadRequest) => Promise<Result<TransfersDownloadResponse>>;
+		cancel: (input: TransfersCancelRequest) => Promise<Result<TransfersCancelResponse>>;
+		onProgress: (listener: (payload: TransferProgressPayload) => void) => () => void;
 		onDone: (listener: (payload: TransferDonePayload) => void) => () => void;
 		pathsForFiles: (files: Array<{ readonly name: string }>) => string[];
 	};
 	files: {
-		openWithSystemApp: (
-			input: FilesOpenWithSystemAppRequest,
-		) => Promise<Result<FilesOpenWithSystemAppResponse>>;
+		openWithSystemApp: (input: FilesOpenWithSystemAppRequest) => Promise<Result<FilesOpenWithSystemAppResponse>>;
 	};
 };

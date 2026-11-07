@@ -19,12 +19,9 @@ interface UrlChoiceModule {
 }
 
 const modulePath = "../../src/renderer/src/urlChoice";
-const {
-	chooseDefaultConnection,
-	extractBucketFromUrl,
-	isPresignedUrl,
-	getUrlFileName,
-} = (await import(modulePath)) as UrlChoiceModule;
+const { chooseDefaultConnection, extractBucketFromUrl, isPresignedUrl, getUrlFileName } = (await import(
+	modulePath
+)) as UrlChoiceModule;
 
 describe("urlChoice", () => {
 	const sampleConnections = [
@@ -51,74 +48,43 @@ describe("urlChoice", () => {
 
 	describe("isPresignedUrl", () => {
 		it("detects X-Amz-Signature query parameter", () => {
-			expect(
-				isPresignedUrl(
-					"https://bucket.s3.amazonaws.com/test.mp4?X-Amz-Signature=abcd123",
-				),
-			).toBe(true);
+			expect(isPresignedUrl("https://bucket.s3.amazonaws.com/test.mp4?X-Amz-Signature=abcd123")).toBe(true);
 		});
 
 		it("detects Signature and Expires query parameters", () => {
-			expect(
-				isPresignedUrl(
-					"https://bucket.s3.amazonaws.com/test.mp4?Signature=xyz&Expires=12345",
-				),
-			).toBe(true);
+			expect(isPresignedUrl("https://bucket.s3.amazonaws.com/test.mp4?Signature=xyz&Expires=12345")).toBe(true);
 		});
 
 		it("returns false for unsigned URLs", () => {
-			expect(
-				isPresignedUrl("https://bucket.s3.amazonaws.com/test.mp4"),
-			).toBe(false);
+			expect(isPresignedUrl("https://bucket.s3.amazonaws.com/test.mp4")).toBe(false);
 			expect(isPresignedUrl("s3://bucket/test.mp4")).toBe(false);
 		});
 	});
 
 	describe("extractBucketFromUrl", () => {
 		it("extracts from s3:// URLs", () => {
-			expect(extractBucketFromUrl("s3://my-bucket/path/to/object")).toBe(
-				"my-bucket",
-			);
+			expect(extractBucketFromUrl("s3://my-bucket/path/to/object")).toBe("my-bucket");
 			expect(extractBucketFromUrl("s3://photos/vacation.jpg")).toBe("photos");
 		});
 
 		it("extracts from AWS virtual-hosted style URLs", () => {
-			expect(
-				extractBucketFromUrl(
-					"https://my-bucket.s3.us-west-2.amazonaws.com/clip.mp4",
-				),
-			).toBe("my-bucket");
-			expect(
-				extractBucketFromUrl(
-					"https://assets.s3.amazonaws.com/logo.png",
-				),
-			).toBe("assets");
+			expect(extractBucketFromUrl("https://my-bucket.s3.us-west-2.amazonaws.com/clip.mp4")).toBe("my-bucket");
+			expect(extractBucketFromUrl("https://assets.s3.amazonaws.com/logo.png")).toBe("assets");
 		});
 
 		it("extracts from AWS path style URLs", () => {
-			expect(
-				extractBucketFromUrl(
-					"https://s3.us-west-2.amazonaws.com/my-bucket/clip.mp4",
-				),
-			).toBe("my-bucket");
-			expect(
-				extractBucketFromUrl("https://s3.amazonaws.com/assets/logo.png"),
-			).toBe("assets");
+			expect(extractBucketFromUrl("https://s3.us-west-2.amazonaws.com/my-bucket/clip.mp4")).toBe("my-bucket");
+			expect(extractBucketFromUrl("https://s3.amazonaws.com/assets/logo.png")).toBe("assets");
 		});
 
 		it("extracts from custom endpoint URLs", () => {
-			expect(
-				extractBucketFromUrl(
-					"http://127.0.0.1:9000/local-bucket/movie.mkv",
-					["127.0.0.1:9000"],
-				),
-			).toBe("local-bucket");
+			expect(extractBucketFromUrl("http://127.0.0.1:9000/local-bucket/movie.mkv", ["127.0.0.1:9000"])).toBe(
+				"local-bucket",
+			);
 		});
 
 		it("returns null for unrecognized URLs", () => {
-			expect(extractBucketFromUrl("https://example.com/not-s3.mp4")).toBe(
-				null,
-			);
+			expect(extractBucketFromUrl("https://example.com/not-s3.mp4")).toBe(null);
 			expect(extractBucketFromUrl("")).toBe(null);
 		});
 	});
@@ -208,15 +174,9 @@ describe("urlChoice", () => {
 
 	describe("getUrlFileName", () => {
 		it("extracts last path segment as filename", () => {
-			expect(
-				getUrlFileName("https://example.com/path/to/my-video.mp4?query=1"),
-			).toBe("my-video.mp4");
-			expect(getUrlFileName("s3://bucket/nested/folder/report.pdf")).toBe(
-				"report.pdf",
-			);
-			expect(getUrlFileName("https://example.com/hello%20world.txt")).toBe(
-				"hello world.txt",
-			);
+			expect(getUrlFileName("https://example.com/path/to/my-video.mp4?query=1")).toBe("my-video.mp4");
+			expect(getUrlFileName("s3://bucket/nested/folder/report.pdf")).toBe("report.pdf");
+			expect(getUrlFileName("https://example.com/hello%20world.txt")).toBe("hello world.txt");
 		});
 
 		it("returns fallback for root path", () => {

@@ -1,10 +1,6 @@
 import { ListBucketsCommand } from "@aws-sdk/client-s3";
 import { channels } from "../../shared/channels";
-import type {
-	Channel,
-	RequestByChannel,
-	ResponseByChannel,
-} from "../../shared/ipc";
+import type { Channel, RequestByChannel, ResponseByChannel } from "../../shared/ipc";
 import { listProfiles } from "../connections/profiles";
 import type { ConnectionStore } from "../connections/store";
 import { mapSsoError, ssoLogin } from "../sso";
@@ -19,9 +15,7 @@ export type IpcDeps = {
 };
 
 type HandlerMap = {
-	[Key in Channel]: (
-		input: RequestByChannel[Key],
-	) => Promise<ResponseByChannel[Key]>;
+	[Key in Channel]: (input: RequestByChannel[Key]) => Promise<ResponseByChannel[Key]>;
 };
 
 function codedError(code: string, message: string) {
@@ -54,40 +48,26 @@ export function connectionHandlers(deps: IpcDeps): HandlerMap {
 			} catch (error) {
 				if (connection.kind === "profile") {
 					const mapped = mapSsoError(error, connection.profile ?? "");
-					if (mapped)
-						throw Object.assign(new Error("SSO login required"), mapped);
+					if (mapped) throw Object.assign(new Error("SSO login required"), mapped);
 				}
-				const failure =
-					error instanceof Error ? error : new Error(String(error));
+				const failure = error instanceof Error ? error : new Error(String(error));
 				throw codedError(
 					"REQUEST_FAILED",
-					`${failure.name}: ${failure.message}`.replace(
-						/(AKIA|ASIA)[A-Z0-9]{16}/g,
-						"[redacted]",
-					),
+					`${failure.name}: ${failure.message}`.replace(/(AKIA|ASIA)[A-Z0-9]{16}/g, "[redacted]"),
 				);
 			}
 		},
 		[channels.ssoLogin]: async (input) => {
-			const profiles = await listProfiles(
-				deps.configFilepath,
-				deps.credentialsFilepath,
-			);
+			const profiles = await listProfiles(deps.configFilepath, deps.credentialsFilepath);
 			if (!profiles.some((profile) => profile.name === input.profile)) {
 				throw codedError("NOT_FOUND", "Profile not found");
 			}
 			const result = await (deps.login ?? ssoLogin)(input.profile);
 			if (!result.ok) {
-				throw codedError(
-					result.code,
-					result.code === "CLI_MISSING"
-						? "AWS CLI not found"
-						: "SSO login failed",
-				);
+				throw codedError(result.code, result.code === "CLI_MISSING" ? "AWS CLI not found" : "SSO login failed");
 			}
 			return { loggedIn: true };
 		},
-		[channels.listProfiles]: async () =>
-			listProfiles(deps.configFilepath, deps.credentialsFilepath),
+		[channels.listProfiles]: async () => listProfiles(deps.configFilepath, deps.credentialsFilepath),
 	};
 }

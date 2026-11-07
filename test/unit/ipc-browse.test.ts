@@ -1,10 +1,7 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	CreateBucketCommand,
-	DeleteBucketCommand,
-} from "@aws-sdk/client-s3";
+import { CreateBucketCommand, DeleteBucketCommand } from "@aws-sdk/client-s3";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectionStore } from "../../src/main/connections/store";
 import { SecretVault } from "../../src/main/connections/secrets";
@@ -54,7 +51,12 @@ function createFakeSender(): SenderLike & {
 }
 
 describe("browse error mapping contract", () => {
- it.each(["NoSuchBucket","NoSuchKey","NotFound"])("maps %s to fixed NOT_FOUND", name => expect(mapS3Error(Object.assign(new Error("private text"),{name}))).toEqual({code:"NOT_FOUND",message:"Request failed"}));
+	it.each(["NoSuchBucket", "NoSuchKey", "NotFound"])("maps %s to fixed NOT_FOUND", (name) =>
+		expect(mapS3Error(Object.assign(new Error("private text"), { name }))).toEqual({
+			code: "NOT_FOUND",
+			message: "Request failed",
+		}),
+	);
 });
 
 describe("browse IPC - buckets and listing", () => {
@@ -76,8 +78,7 @@ describe("browse IPC - buckets and listing", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -95,10 +96,7 @@ describe("browse IPC - buckets and listing", () => {
 		});
 
 		const sender = createFakeSender();
-		const result = await handlers.get(channels.bucketsList)!(
-			{ sender },
-			{ connectionId: conn.id },
-		);
+		const result = await handlers.get(channels.bucketsList)!({ sender }, { connectionId: conn.id });
 
 		expect(result.ok).toBe(true);
 		expect(result.data.listDenied).toBe(false);
@@ -116,10 +114,7 @@ describe("browse IPC - buckets and listing", () => {
 			});
 		};
 
-		const deniedResult = await handlers.get(channels.bucketsList)!(
-			{ sender },
-			{ connectionId: conn.id },
-		);
+		const deniedResult = await handlers.get(channels.bucketsList)!({ sender }, { connectionId: conn.id });
 		expect(deniedResult.ok).toBe(true);
 		expect(deniedResult.data.listDenied).toBe(true);
 		expect(deniedResult.data.buckets).toEqual([
@@ -142,8 +137,7 @@ describe("browse IPC - buckets and listing", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -159,34 +153,22 @@ describe("browse IPC - buckets and listing", () => {
 		const sender = createFakeSender();
 
 		// Pin a bucket
-		const pinRes = await handlers.get(channels.bucketsPin)!(
-			{ sender },
-			{ connectionId: conn.id, bucket: "bucket-a" },
-		);
+		const pinRes = await handlers.get(channels.bucketsPin)!({ sender }, { connectionId: conn.id, bucket: "bucket-a" });
 		expect(pinRes.ok).toBe(true);
 		expect(pinRes.data.pinnedBuckets).toEqual(["bucket-a"]);
 
 		// Pin duplicate bucket - deduplicated
-		const pinDup = await handlers.get(channels.bucketsPin)!(
-			{ sender },
-			{ connectionId: conn.id, bucket: "bucket-a" },
-		);
+		const pinDup = await handlers.get(channels.bucketsPin)!({ sender }, { connectionId: conn.id, bucket: "bucket-a" });
 		expect(pinDup.ok).toBe(true);
 		expect(pinDup.data.pinnedBuckets).toEqual(["bucket-a"]);
 
 		// Add extra bucket
-		const addRes = await handlers.get(channels.bucketsAdd)!(
-			{ sender },
-			{ connectionId: conn.id, bucket: "extra-1" },
-		);
+		const addRes = await handlers.get(channels.bucketsAdd)!({ sender }, { connectionId: conn.id, bucket: "extra-1" });
 		expect(addRes.ok).toBe(true);
 		expect(addRes.data.extraBuckets).toEqual(["extra-1"]);
 
 		// Add duplicate extra bucket
-		const addDup = await handlers.get(channels.bucketsAdd)!(
-			{ sender },
-			{ connectionId: conn.id, bucket: "extra-1" },
-		);
+		const addDup = await handlers.get(channels.bucketsAdd)!({ sender }, { connectionId: conn.id, bucket: "extra-1" });
 		expect(addDup.ok).toBe(true);
 		expect(addDup.data.extraBuckets).toEqual(["extra-1"]);
 
@@ -211,10 +193,7 @@ describe("browse IPC - buckets and listing", () => {
 		expect(clients.invalidate).not.toHaveBeenCalled();
 
 		// Unknown connection returns NOT_FOUND
-		const unknown = await handlers.get(channels.bucketsPin)!(
-			{ sender },
-			{ connectionId: "nonexistent", bucket: "b" },
-		);
+		const unknown = await handlers.get(channels.bucketsPin)!({ sender }, { connectionId: "nonexistent", bucket: "b" });
 		expect(unknown.ok).toBe(false);
 		expect(unknown.error.code).toBe("NOT_FOUND");
 	});
@@ -250,8 +229,7 @@ describe("browse IPC - buckets and listing", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -271,10 +249,7 @@ describe("browse IPC - buckets and listing", () => {
 		);
 
 		expect(result.ok).toBe(true);
-		expect(result.data.folders).toEqual([
-			"photos/summer/",
-			"photos/winter/",
-		]);
+		expect(result.data.folders).toEqual(["photos/summer/", "photos/winter/"]);
 		expect(result.data.objects).toEqual([
 			{
 				key: "photos/img1.png",
@@ -321,8 +296,7 @@ describe("browse IPC - buckets and listing", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -376,10 +350,9 @@ describe("browse IPC - buckets and listing", () => {
 		expect(ssoErr.error.profile).toBe("my-sso-profile");
 
 		// Redaction of AKIA in REQUEST_FAILED
-		errorToThrow = Object.assign(
-			new Error("Request failed for AKIAFIXTUREFIXTURE00 with error"),
-			{ name: "UnknownError" },
-		);
+		errorToThrow = Object.assign(new Error("Request failed for AKIAFIXTUREFIXTURE00 with error"), {
+			name: "UnknownError",
+		});
 		const redacted = await handlers.get(channels.objectsList)!(
 			{ sender },
 			{ connectionId: manualConn.id, bucket: "my-bucket" },
@@ -401,8 +374,7 @@ describe("browse IPC - buckets and listing", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -427,10 +399,7 @@ describe("browse IPC - buckets and listing", () => {
 		expect(badPrefix.error.code).toBe("INVALID_REQUEST");
 
 		// Missing connectionId
-		const missingConn = await handlers.get(channels.objectsList)!(
-			{ sender },
-			{ bucket: "valid-bucket" },
-		);
+		const missingConn = await handlers.get(channels.objectsList)!({ sender }, { bucket: "valid-bucket" });
 		expect(missingConn.ok).toBe(false);
 		expect(missingConn.error.code).toBe("INVALID_REQUEST");
 
@@ -459,8 +428,7 @@ describe("browse IPC - search job registry", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -490,11 +458,7 @@ describe("browse IPC - search job registry", () => {
 
 		// Wait for runSearch promise to settle
 		await vi.waitFor(() => {
-			expect(sender.sent.map((s) => s.channel)).toEqual([
-				"search:batch",
-				"search:progress",
-				"search:done",
-			]);
+			expect(sender.sent.map((s) => s.channel)).toEqual(["search:batch", "search:progress", "search:done"]);
 		});
 
 		const batch = sender.sent[0].payload as any;
@@ -523,12 +487,12 @@ describe("browse IPC - search job registry", () => {
 		const store = new ConnectionStore(dir, vault);
 		const handlers = new Map<string, (event: any, input: any) => Promise<any>>();
 
-		let s3Resolve: ((val: any) => void) | null = null;
+		let _s3Resolve: ((val: any) => void) | null = null;
 		const clients: any = {
 			get: async () => ({
 				send: async (_cmd: any, opts: any) => {
 					return new Promise((resolve, reject) => {
-						s3Resolve = resolve;
+						_s3Resolve = resolve;
 						if (opts?.abortSignal) {
 							opts.abortSignal.addEventListener("abort", () => {
 								const err = new Error("Aborted");
@@ -543,8 +507,7 @@ describe("browse IPC - search job registry", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -605,9 +568,7 @@ describe("browse IPC - search job registry", () => {
 
 		// Wait for job to settle and send searchDone
 		await vi.waitFor(() => {
-			expect(
-				ownerSender.sent.some((s) => s.channel === "search:done"),
-			).toBe(true);
+			expect(ownerSender.sent.some((s) => s.channel === "search:done")).toBe(true);
 		});
 
 		const done = ownerSender.sent.find((s) => s.channel === "search:done");
@@ -637,8 +598,7 @@ describe("browse IPC - search job registry", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -665,9 +625,7 @@ describe("browse IPC - search job registry", () => {
 		expect(startRes.ok).toBe(true);
 
 		await vi.waitFor(() => {
-			expect(
-				sender.sent.some((s) => s.channel === "search:done"),
-			).toBe(true);
+			expect(sender.sent.some((s) => s.channel === "search:done")).toBe(true);
 		});
 
 		const done = sender.sent.find((s) => s.channel === "search:done");
@@ -700,8 +658,7 @@ describe("browse IPC - search job registry", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -806,8 +763,7 @@ describe("browse IPC - search job registry", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -822,10 +778,7 @@ describe("browse IPC - search job registry", () => {
 
 		const sender = createFakeSender();
 
-		const listRes = await handlers.get(channels.bucketsList)!(
-			{ sender },
-			{ connectionId: conn.id },
-		);
+		const listRes = await handlers.get(channels.bucketsList)!({ sender }, { connectionId: conn.id });
 		expect(listRes.ok).toBe(true);
 		assertNoSecrets(listRes);
 
@@ -871,19 +824,14 @@ describe("browse IPC - search job registry", () => {
 		assertNoSecrets(searchRes);
 
 		await vi.waitFor(() => {
-			expect(
-				sender.sent.some((s) => s.channel === "search:done"),
-			).toBe(true);
+			expect(sender.sent.some((s) => s.channel === "search:done")).toBe(true);
 		});
 
 		for (const event of sender.sent) {
 			assertNoSecrets(event.payload);
 		}
 
-		const cancelRes = await handlers.get(channels.searchCancel)!(
-			{ sender },
-			{ jobId: "job-secret-scan-1" },
-		);
+		const cancelRes = await handlers.get(channels.searchCancel)!({ sender }, { jobId: "job-secret-scan-1" });
 		expect(cancelRes.ok).toBe(true);
 		assertNoSecrets(cancelRes);
 	});
@@ -904,8 +852,7 @@ describe("browse IPC - search job registry", () => {
 
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients },
 		);
@@ -932,9 +879,7 @@ describe("browse IPC - search job registry", () => {
 		expect(startRes.ok).toBe(true);
 
 		await vi.waitFor(() => {
-			expect(
-				sender.sent.some((s) => s.channel === "search:done"),
-			).toBe(true);
+			expect(sender.sent.some((s) => s.channel === "search:done")).toBe(true);
 		});
 
 		const done = sender.sent.find((s) => s.channel === "search:done");
@@ -1017,8 +962,7 @@ describe("browse IPC - search job registry", () => {
 		const jobRegistry = new SearchJobRegistry();
 		register(
 			{
-				handle: (channel: string, listener: any) =>
-					handlers.set(channel, listener),
+				handle: (channel: string, listener: any) => handlers.set(channel, listener),
 			},
 			{ store, clients, jobRegistry } as any,
 		);
@@ -1073,17 +1017,12 @@ describe("browse IPC - search job registry", () => {
 });
 
 describe("createBucketName", () => {
-	it.each([
-		"abc",
-		"my-bucket",
-		"my.bucket.name",
-		"a1b2c3",
-		"a".repeat(63),
-		"1.2.3.x",
-		"xn-ok-name",
-	])("accepts %s", (name) => {
-		expect(createBucketName.safeParse(name).success).toBe(true);
-	});
+	it.each(["abc", "my-bucket", "my.bucket.name", "a1b2c3", "a".repeat(63), "1.2.3.x", "xn-ok-name"])(
+		"accepts %s",
+		(name) => {
+			expect(createBucketName.safeParse(name).success).toBe(true);
+		},
+	);
 
 	it.each([
 		["too short", "ab"],
@@ -1149,9 +1088,7 @@ describe("createBucket and deleteBucket S3 functions", () => {
 		const command = client.send.mock.calls[0][0] as DeleteBucketCommand;
 		expect(command).toBeInstanceOf(DeleteBucketCommand);
 		expect(command.input).toEqual({ Bucket: "my-bucket" });
-		const names = client.send.mock.calls.map(
-			(call) => (call[0] as { constructor: { name: string } }).constructor.name,
-		);
+		const names = client.send.mock.calls.map((call) => (call[0] as { constructor: { name: string } }).constructor.name);
 		expect(names).not.toContain("DeleteObjectsCommand");
 		expect(names).not.toContain("ListObjectsV2Command");
 		expect(names).not.toContain("ListObjectVersionsCommand");
@@ -1174,10 +1111,7 @@ describe("browse IPC - bucket create and delete", () => {
 			config: { region: async () => "ap-south-1" },
 		};
 		const clients: any = { get: vi.fn(async () => client), invalidate: vi.fn() };
-		register(
-			{ handle: (channel: string, listener: any) => handlers.set(channel, listener) },
-			{ store, clients },
-		);
+		register({ handle: (channel: string, listener: any) => handlers.set(channel, listener) }, { store, clients });
 		const conn =
 			options.kind === "profile"
 				? await store.create({ kind: "profile", name: "p", profile: "dev" } as any)
@@ -1188,8 +1122,7 @@ describe("browse IPC - bucket create and delete", () => {
 						accessKeyId: "KEYID123",
 						secretAccessKey: "SECRET123",
 					});
-		const call = (channel: string, input: unknown) =>
-			handlers.get(channel)!({ sender: createFakeSender() }, input);
+		const call = (channel: string, input: unknown) => handlers.get(channel)!({ sender: createFakeSender() }, input);
 		return {
 			store,
 			conn,
@@ -1311,9 +1244,7 @@ describe("browse IPC - bucket create and delete", () => {
 			bucket: "some-bucket",
 		});
 		expect(result.ok).toBe(true);
-		expect(result.data.warning).toBe(
-			"Bucket deleted, but the saved bucket list could not be updated",
-		);
+		expect(result.data.warning).toBe("Bucket deleted, but the saved bucket list could not be updated");
 	});
 
 	it.each([
@@ -1380,9 +1311,6 @@ describe("browse IPC - bucket create and delete", () => {
 			bucket: "new-bucket",
 		});
 		expect(result).toEqual({ ok: true, data: { bucket: "new-bucket" } });
-		expect((await t.store.get(t.conn.id))!.extraBuckets).toEqual([
-			"concurrent",
-			"new-bucket",
-		]);
+		expect((await t.store.get(t.conn.id))!.extraBuckets).toEqual(["concurrent", "new-bucket"]);
 	});
 });

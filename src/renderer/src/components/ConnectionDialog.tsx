@@ -1,19 +1,20 @@
 import { Button } from "./ui/button";
-import {
-	useEffect,
-	useId,
-	useState,
-	type ChangeEvent,
-	type JSX,
-} from "react";
+import { BANNER_DESTRUCTIVE_CLASS, BANNER_SEPARATOR_CLASS } from "./ui/alert";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useId, useMemo, useState, type JSX } from "react";
+import { useForm } from "react-hook-form";
 import type { CreateResponse, ListProfilesResponse } from "../../../shared/ipc";
 import { api, unwrap } from "../api";
-import {
-	buildCreateRequest,
-	buildUpdateRequest,
-	type ConnectionFormState,
-} from "../format";
+import { connectionFormSchema } from "../forms";
+import { profilesQuery } from "../queries";
+import { buildCreateRequest, buildUpdateRequest, type ConnectionFormState } from "../format";
+import { cn } from "../lib/utils";
 import { Dialog } from "@/components/ui/dialog";
+import { Checkbox } from "./ui/checkbox";
+import { FieldError } from "./ui/field";
+import { Input } from "./ui/input";
+import { Select } from "./ui/select";
 
 export type ConnectionView = CreateResponse;
 
@@ -43,128 +44,63 @@ export function ConnectionDialog({
 	const endpointUrlId = useId();
 	const forcePathStyleId = useId();
 
-	const [form, setForm] = useState<ConnectionFormState>({
-		name: "",
-		kind: "profile",
-		profile: "",
-		region: "",
-		endpoint: "",
-		forcePathStyle: false,
-		accessKeyId: "",
-		secretAccessKey: "",
-		sessionToken: "",
+	const defaultValues = useMemo<ConnectionFormState>(
+		() => ({
+			name: initialConnection?.name ?? "",
+			kind: initialConnection?.kind ?? "profile",
+			profile: initialConnection?.profile || "",
+			region: initialConnection?.region || "",
+			endpoint: initialConnection?.endpoint || "",
+			forcePathStyle: initialConnection?.forcePathStyle ?? false,
+			accessKeyId: "",
+			secretAccessKey: "",
+			sessionToken: "",
+		}),
+		[initialConnection],
+	);
+	const schema = useMemo(() => connectionFormSchema(isEdit), [isEdit]);
+	const {
+		register,
+		handleSubmit,
+		reset,
+		setValue,
+		getValues,
+		watch,
+		setError,
+		formState: { errors, isSubmitting },
+	} = useForm<ConnectionFormState, unknown, ConnectionFormState>({
+		resolver: zodResolver(schema),
+		defaultValues,
 	});
-	const [profiles, setProfiles] = useState<ListProfilesResponse>([]);
-	const [error, setError] = useState<string | null>(null);
-	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+	const kind = watch("kind");
 	const [testResult, setTestResult] = useState<{
 		ok: boolean;
 		message: string;
 	} | null>(null);
 	const [testing, setTesting] = useState<boolean>(false);
-	const [saving, setSaving] = useState<boolean>(false);
 
+	const profilesQueryResult = useQuery({ ...profilesQuery(), enabled: isOpen });
+	const profiles: ListProfilesResponse = profilesQueryResult.data ?? [];
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: isOpen is a reset trigger so fields clear on open and close
 	useEffect(() => {
-		if (!isOpen) {
-			setForm({
-				name: "",
-				kind: "profile",
-				profile: "",
-				region: "",
-				endpoint: "",
-				forcePathStyle: false,
-				accessKeyId: "",
-				secretAccessKey: "",
-				sessionToken: "",
-			});
-			setError(null);
-			setFieldErrors({});
-			setTestResult(null);
-			setTesting(false);
-			setSaving(false);
-			return;
-		}
-		setError(null);
-		setFieldErrors({});
+		reset(defaultValues);
 		setTestResult(null);
+		setTesting(false);
+	}, [isOpen, defaultValues, reset]);
 
-		if (initialConnection) {
-			setForm({
-				name: initialConnection.name,
-				kind: initialConnection.kind,
-				profile: initialConnection.profile || "",
-				region: initialConnection.region || "",
-				endpoint: initialConnection.endpoint || "",
-				forcePathStyle: initialConnection.forcePathStyle,
-				accessKeyId: "",
-				secretAccessKey: "",
-				sessionToken: "",
-			});
-		} else {
-			setForm({
-				name: "",
-				kind: "profile",
-				profile: "",
-				region: "",
-				endpoint: "",
-				forcePathStyle: false,
-				accessKeyId: "",
-				secretAccessKey: "",
-				sessionToken: "",
-			});
+	const profilesData = profilesQueryResult.data;
+	useEffect(() => {
+		if (isOpen && !initialConnection && profilesData && profilesData.length > 0 && !getValues("profile")) {
+			setValue("profile", profilesData[0].name);
 		}
-
-		void api.connections
-			.listProfiles()
-			.then((res) => {
-				const data = unwrap(res);
-				setProfiles(data);
-				if (!initialConnection && data.length > 0) {
-					setForm((prev) => ({
-						...prev,
-						profile: prev.profile || data[0].name,
-					}));
-				}
-			})
-			.catch(() => {
-				// Ignore profile listing errors if AWS config missing
-			});
-	}, [isOpen, initialConnection]);
+	}, [isOpen, initialConnection, profilesData, getValues, setValue]);
 
 	if (!isOpen) {
 		return null;
 	}
 
-	function validate(): boolean {
-		const errors: Record<string, string> = {};
-		if (!form.name.trim()) {
-			errors.name = "Connection name is required.";
-		}
-		if (form.kind === "profile") {
-			if (!form.profile?.trim()) {
-				errors.profile = "AWS profile name is required.";
-			}
-		} else {
-			if (!form.region?.trim()) {
-				errors.region = "AWS Region is required.";
-			}
-			if (!isEdit && !form.accessKeyId?.trim()) {
-				errors.accessKeyId = "Access Key ID is required.";
-			}
-			if (!isEdit && !form.secretAccessKey?.trim()) {
-				errors.secretAccessKey = "Secret Access Key is required.";
-			}
-		}
-		setFieldErrors(errors);
-		return Object.keys(errors).length === 0;
-	}
-
-	async function handleSubmit(): Promise<void> {
-		if (!validate()) {
-			return;
-		}
-		setSaving(true);
-		setError(null);
+	async function onValid(form: ConnectionFormState): Promise<void> {
 		try {
 			if (isEdit && initialConnection) {
 				const req = buildUpdateRequest(initialConnection.id, form);
@@ -180,13 +116,7 @@ export function ConnectionDialog({
 				onClose();
 			}
 		} catch (err: unknown) {
-			if (err instanceof Error) {
-				setError(err.message);
-			} else {
-				setError("Failed to save connection.");
-			}
-		} finally {
-			setSaving(false);
+			setError("root.server", { message: err instanceof Error ? err.message : "Failed to save connection." });
 		}
 	}
 
@@ -228,7 +158,7 @@ export function ConnectionDialog({
 				<Button
 					type="button"
 					variant="secondary"
-					disabled={testing || saving}
+					disabled={testing || isSubmitting}
 					onClick={() => {
 						void handleTestConnection();
 					}}
@@ -236,55 +166,42 @@ export function ConnectionDialog({
 					{testing ? "Testing..." : "Test connection"}
 				</Button>
 			)}
-			<div className="app-dialog-primary-actions">
-				<Button
-					type="button"
-					variant="secondary"
-					onClick={onClose}
-					disabled={saving}
-				>
+			<div className="ml-auto flex items-center gap-2">
+				<Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
 					Cancel
 				</Button>
 				<Button
 					type="button"
 					variant="default"
-					disabled={saving}
+					disabled={isSubmitting}
 					onClick={() => {
-						void handleSubmit();
+						void handleSubmit(onValid)();
 					}}
 				>
-					{saving ? "Saving..." : "Save connection"}
+					{isSubmitting ? "Saving..." : "Save connection"}
 				</Button>
 			</div>
 		</>
 	);
 
 	return (
-		<Dialog
-			isOpen={isOpen}
-			title={isEdit ? "Edit connection" : "Add connection"}
-			onClose={onClose}
-			footer={footer}
-		>
-			{error && (
-				<div className="tds-announcement tds-announcement--error app-dialog-banner">
-					<div className="tds-announcement__content">
-						<div className="tds-announcement__message">{error}</div>
+		<Dialog isOpen={isOpen} title={isEdit ? "Edit connection" : "Add connection"} onClose={onClose} footer={footer}>
+			{errors.root?.server?.message && (
+				<div className={cn("mb-2 w-full", BANNER_DESTRUCTIVE_CLASS)}>
+					<div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+						<div className="text-sm text-foreground-secondary">{errors.root.server.message}</div>
 					</div>
 				</div>
 			)}
 
-			<div className="app-dialog-kind-selector">
+			<div className="mb-2 flex gap-2">
 				<Button
 					type="button"
 					size="sm"
-					variant={form.kind === "profile" ? "default" : "secondary"}
-					aria-pressed={form.kind === "profile"}
+					variant={kind === "profile" ? "default" : "secondary"}
+					aria-pressed={kind === "profile"}
 					onClick={() => {
-						setForm((prev) => ({
-							...prev,
-							kind: "profile",
-						}));
+						setValue("kind", "profile");
 					}}
 				>
 					AWS Profile / SSO
@@ -292,319 +209,176 @@ export function ConnectionDialog({
 				<Button
 					type="button"
 					size="sm"
-					variant={form.kind === "manual" ? "default" : "secondary"}
-					aria-pressed={form.kind === "manual"}
+					variant={kind === "manual" ? "default" : "secondary"}
+					aria-pressed={kind === "manual"}
 					onClick={() => {
-						setForm((prev) => ({
-							...prev,
-							kind: "manual",
-						}));
+						setValue("kind", "manual");
 					}}
 				>
 					Manual Credentials
 				</Button>
 			</div>
 
-			<div
-				className={`tds-text-input app-dialog-field ${fieldErrors.name ? "tds-text-input--error" : ""}`}
-			>
-				<label htmlFor={nameId} className="tds-field-label">
+			<div className="flex w-full min-w-0 flex-col gap-1">
+				<label htmlFor={nameId} className="text-xs font-medium text-foreground">
 					Connection name (required)
 				</label>
-				<input
+				<Input
 					id={nameId}
 					type="text"
-					className="tds-text-input__field"
-					value={form.name}
-					onChange={(e: ChangeEvent<HTMLInputElement>) => {
-						setForm((prev) => ({
-							...prev,
-							name: e.target.value,
-						}));
-					}}
+					className={errors.name ? "border-destructive" : undefined}
+					{...register("name")}
 					placeholder="e.g. Production Data"
 				/>
-				<span className="tds-field-caption">
-					A recognizable label for this connection
-				</span>
-				{fieldErrors.name && (
-					<span className="tds-field-validation">
-						{fieldErrors.name}
-					</span>
-				)}
+				<span className="text-xs text-foreground-secondary">A recognizable label for this connection</span>
+				<FieldError error={errors.name} />
 			</div>
 
-			{form.kind === "profile" ? (
+			{kind === "profile" ? (
 				<>
-					<div
-						className={`tds-text-input app-dialog-field ${fieldErrors.profile ? "tds-text-input--error" : ""}`}
-					>
-						<label htmlFor={profileId} className="tds-field-label">
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={profileId} className="text-xs font-medium text-foreground">
 							AWS Profile (required)
 						</label>
 						{profiles.length > 0 ? (
-							<select
+							<Select
 								id={profileId}
-								className="tds-text-input__field"
-								value={form.profile}
-								onChange={(e) => {
-									setForm((prev) => ({
-										...prev,
-										profile: e.target.value,
-									}));
-								}}
+								className={errors.profile ? "border-destructive" : undefined}
+								{...register("profile")}
 							>
 								<option value="">Select a profile...</option>
-								{profiles.map(
-									(p: ListProfilesResponse[number]) => (
-										<option key={p.name} value={p.name}>
-											{p.name} ({p.kind})
-										</option>
-									),
-								)}
-							</select>
+								{profiles.map((p: ListProfilesResponse[number]) => (
+									<option key={p.name} value={p.name}>
+										{p.name} ({p.kind})
+									</option>
+								))}
+							</Select>
 						) : (
-							<input
+							<Input
 								id={profileId}
 								type="text"
-								className="tds-text-input__field"
-								value={form.profile}
-								onChange={(e: ChangeEvent<HTMLInputElement>) => {
-									setForm((prev) => ({
-										...prev,
-										profile: e.target.value,
-									}));
-								}}
+								className={errors.profile ? "border-destructive" : undefined}
+								{...register("profile")}
 								placeholder="default"
 							/>
 						)}
-						<span className="tds-field-caption">
-							Configured profile from ~/.aws/config
-						</span>
-						{fieldErrors.profile && (
-							<span className="tds-field-validation">
-								{fieldErrors.profile}
-							</span>
-						)}
+						<span className="text-xs text-foreground-secondary">Configured profile from ~/.aws/config</span>
+						<FieldError error={errors.profile} />
 					</div>
 
-					<div className="tds-text-input app-dialog-field">
-						<label
-							htmlFor={regionOverrideId}
-							className="tds-field-label"
-						>
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={regionOverrideId} className="text-xs font-medium text-foreground">
 							Region override
 						</label>
-						<input
+						<Input
 							id={regionOverrideId}
 							type="text"
-							className="tds-text-input__field"
-							value={form.region || ""}
-							onChange={(e: ChangeEvent<HTMLInputElement>) => {
-								setForm((prev) => ({
-									...prev,
-									region: e.target.value,
-								}));
-							}}
+							className={errors.region ? "border-destructive" : undefined}
+							{...register("region")}
 							placeholder="e.g. us-east-1"
 						/>
-						<span className="tds-field-caption">
-							Leave blank to use profile default
-						</span>
+						<span className="text-xs text-foreground-secondary">Leave blank to use profile default</span>
+						<FieldError error={errors.region} />
 					</div>
 
-					<div className="tds-text-input app-dialog-field">
-						<label
-							htmlFor={endpointOverrideId}
-							className="tds-field-label"
-						>
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={endpointOverrideId} className="text-xs font-medium text-foreground">
 							Endpoint override
 						</label>
-						<input
+						<Input
 							id={endpointOverrideId}
 							type="url"
-							className="tds-text-input__field"
-							value={form.endpoint || ""}
-							onChange={(e: ChangeEvent<HTMLInputElement>) => {
-								setForm((prev) => ({
-									...prev,
-									endpoint: e.target.value,
-								}));
-							}}
+							className={errors.endpoint ? "border-destructive" : undefined}
+							{...register("endpoint")}
 							placeholder="http://127.0.0.1:9000"
 						/>
-						<span className="tds-field-caption">
-							Optional custom endpoint URL
-						</span>
+						<span className="text-xs text-foreground-secondary">Optional custom endpoint URL</span>
+						<FieldError error={errors.endpoint} />
 					</div>
 				</>
 			) : (
 				<>
-					<div
-						className={`tds-text-input app-dialog-field ${fieldErrors.region ? "tds-text-input--error" : ""}`}
-					>
-						<label
-							htmlFor={manualRegionId}
-							className="tds-field-label"
-						>
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={manualRegionId} className="text-xs font-medium text-foreground">
 							Region (required)
 						</label>
-						<input
+						<Input
 							id={manualRegionId}
 							type="text"
-							className="tds-text-input__field"
-							value={form.region || ""}
-							onChange={(e: ChangeEvent<HTMLInputElement>) => {
-								setForm((prev) => ({
-									...prev,
-									region: e.target.value,
-								}));
-							}}
+							className={errors.region ? "border-destructive" : undefined}
+							{...register("region")}
 							placeholder="us-east-1"
 						/>
-						{fieldErrors.region && (
-							<span className="tds-field-validation">
-								{fieldErrors.region}
-							</span>
-						)}
+						<FieldError error={errors.region} />
 					</div>
 
-					<div
-						className={`tds-text-input app-dialog-field ${fieldErrors.accessKeyId ? "tds-text-input--error" : ""}`}
-					>
-						<label
-							htmlFor={accessKeyIdId}
-							className="tds-field-label"
-						>
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={accessKeyIdId} className="text-xs font-medium text-foreground">
 							Access Key ID (required)
 						</label>
-						<input
+						<Input
 							id={accessKeyIdId}
 							type="text"
-							className="tds-text-input__field"
-							value={form.accessKeyId || ""}
-							onChange={(e: ChangeEvent<HTMLInputElement>) => {
-								setForm((prev) => ({
-									...prev,
-									accessKeyId: e.target.value,
-								}));
-							}}
+							className={errors.accessKeyId ? "border-destructive" : undefined}
+							{...register("accessKeyId")}
 							placeholder="AKIA..."
 						/>
-						{fieldErrors.accessKeyId && (
-							<span className="tds-field-validation">
-								{fieldErrors.accessKeyId}
-							</span>
-						)}
+						<FieldError error={errors.accessKeyId} />
 					</div>
 
-					<div
-						className={`tds-text-input app-dialog-field ${fieldErrors.secretAccessKey ? "tds-text-input--error" : ""}`}
-					>
-						<label
-							htmlFor={secretAccessKeyId}
-							className="tds-field-label"
-						>
-							Secret Access Key{" "}
-							{isEdit
-								? "(leave blank to keep unchanged)"
-								: "(required)"}
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={secretAccessKeyId} className="text-xs font-medium text-foreground">
+							Secret Access Key {isEdit ? "(leave blank to keep unchanged)" : "(required)"}
 						</label>
-						<input
+						<Input
 							id={secretAccessKeyId}
 							type="password"
-							className="tds-text-input__field"
-							value={form.secretAccessKey || ""}
-							onChange={(e: ChangeEvent<HTMLInputElement>) => {
-								setForm((prev) => ({
-									...prev,
-									secretAccessKey: e.target.value,
-								}));
-							}}
+							className={errors.secretAccessKey ? "border-destructive" : undefined}
+							{...register("secretAccessKey")}
 							placeholder={isEdit ? "••••••••••••••••" : ""}
 						/>
-						{fieldErrors.secretAccessKey && (
-							<span className="tds-field-validation">
-								{fieldErrors.secretAccessKey}
-							</span>
-						)}
+						<FieldError error={errors.secretAccessKey} />
 					</div>
 
-					<div className="tds-text-input app-dialog-field">
-						<label
-							htmlFor={sessionTokenId}
-							className="tds-field-label"
-						>
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={sessionTokenId} className="text-xs font-medium text-foreground">
 							Session token
 						</label>
-						<input
+						<Input
 							id={sessionTokenId}
 							type="password"
-							className="tds-text-input__field"
-							value={form.sessionToken || ""}
-							onChange={(e: ChangeEvent<HTMLInputElement>) => {
-								setForm((prev) => ({
-									...prev,
-									sessionToken: e.target.value,
-								}));
-							}}
+							{...register("sessionToken")}
 							placeholder="Optional temporary credentials token"
 						/>
 					</div>
 
-					<div className="tds-text-input app-dialog-field">
-						<label
-							htmlFor={endpointUrlId}
-							className="tds-field-label"
-						>
+					<div className="flex w-full min-w-0 flex-col gap-1">
+						<label htmlFor={endpointUrlId} className="text-xs font-medium text-foreground">
 							Endpoint URL
 						</label>
-						<input
+						<Input
 							id={endpointUrlId}
 							type="url"
-							className="tds-text-input__field"
-							value={form.endpoint || ""}
-							onChange={(e: ChangeEvent<HTMLInputElement>) => {
-								setForm((prev) => ({
-									...prev,
-									endpoint: e.target.value,
-								}));
-							}}
+							className={errors.endpoint ? "border-destructive" : undefined}
+							{...register("endpoint")}
 							placeholder="http://127.0.0.1:9000"
 						/>
+						<FieldError error={errors.endpoint} />
 					</div>
 				</>
 			)}
 
-			<div className="app-dialog-checkbox-row">
-				<input
-					type="checkbox"
-					id={forcePathStyleId}
-					className="tds-checkbox"
-					checked={form.forcePathStyle}
-					onChange={(e: ChangeEvent<HTMLInputElement>) => {
-						setForm((prev) => ({
-							...prev,
-							forcePathStyle: e.target.checked,
-						}));
-					}}
-				/>
-				<label
-					htmlFor={forcePathStyleId}
-					className="tds-field-label app-checkbox-label"
-				>
+			<div className="mt-2 flex items-center gap-2">
+				<Checkbox type="checkbox" id={forcePathStyleId} {...register("forcePathStyle")} />
+				<label htmlFor={forcePathStyleId} className="cursor-pointer text-sm font-medium text-foreground">
 					Force path-style URLs (required for MinIO / LocalStack)
 				</label>
 			</div>
 
 			{testResult && (
-				<div
-					className={`tds-announcement ${testResult.ok ? "tds-announcement--success" : "tds-announcement--error"} app-dialog-banner`}
-				>
-					<div className="tds-announcement__content">
-						<div className="tds-announcement__message">
-							{testResult.message}
-						</div>
+				<div className={cn("mb-2 w-full", testResult.ok ? BANNER_SEPARATOR_CLASS : BANNER_DESTRUCTIVE_CLASS)}>
+					<div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+						<div className="text-sm text-foreground-secondary">{testResult.message}</div>
 					</div>
 				</div>
 			)}

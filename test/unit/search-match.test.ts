@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-	matchesQuery,
-	runSearch,
-	MAX_SEARCH_MATCHES,
-	type SearchMatch,
-} from "../../src/main/s3/search";
+import { matchesQuery, runSearch, MAX_SEARCH_MATCHES, type SearchMatch } from "../../src/main/s3/search";
 
 describe("matchesQuery", () => {
 	it("matches case-insensitively", () => {
@@ -221,11 +216,7 @@ describe("runSearch", () => {
 		};
 
 		await expect(
-			runSearch(
-				client as any,
-				{ bucket: "b", prefix: "", query: "q" },
-				{ onBatch: vi.fn(), onProgress: vi.fn() },
-			),
+			runSearch(client as any, { bucket: "b", prefix: "", query: "q" }, { onBatch: vi.fn(), onProgress: vi.fn() }),
 		).rejects.toThrow(expectedError);
 	});
 });

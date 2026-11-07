@@ -3,20 +3,13 @@ import { describe, expect, it } from "vitest";
 interface TransferStateModule {
 	updateTransfersOnProgress(prev: any[], payload: any): any[];
 	updateTransfersOnDone(prev: any[], payload: any, meta?: any): any[];
-	shouldClearViewerTarget(
-		target: any,
-		item: any,
-		connectionId: string | null,
-		bucket: string | null,
-	): boolean;
+	shouldClearViewerTarget(target: any, item: any, connectionId: string | null, bucket: string | null): boolean;
 }
 
 const modulePath = "../../src/renderer/src/App";
-const {
-	updateTransfersOnProgress,
-	updateTransfersOnDone,
-	shouldClearViewerTarget,
-} = (await import(modulePath)) as TransferStateModule;
+const { updateTransfersOnProgress, updateTransfersOnDone, shouldClearViewerTarget } = (await import(
+	modulePath
+)) as TransferStateModule;
 
 describe("transferState", () => {
 	describe("updateTransfersOnProgress", () => {

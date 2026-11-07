@@ -35,30 +35,14 @@ describe("RustFS S3 factory integration", () => {
 			accessKeyId: "rustfsadmin",
 			secretAccessKey: "rustfsadmin",
 		});
-		expect(
-			(await (await factory.get(manual)).send(new ListBucketsCommand({})))
-				.Buckets,
-		).toBeDefined();
+		expect((await (await factory.get(manual)).send(new ListBucketsCommand({}))).Buckets).toBeDefined();
 		const aws = await mkdtemp(join(tmpdir(), "aws-fixture-")),
 			cfg = join(aws, "config"),
 			cred = join(aws, "credentials");
-		await writeFile(
-			cfg,
-			[
-				"[profile rust]",
-				"region=us-east-1",
-				"endpoint_url=http://127.0.0.1:19000",
-				"",
-			].join("\n"),
-		);
+		await writeFile(cfg, ["[profile rust]", "region=us-east-1", "endpoint_url=http://127.0.0.1:19000", ""].join("\n"));
 		await writeFile(
 			cred,
-			[
-				"[rust]",
-				"aws_access_key_id=rustfsadmin",
-				"aws_secret_access_key=rustfsadmin",
-				"",
-			].join("\n"),
+			["[rust]", "aws_access_key_id=rustfsadmin", "aws_secret_access_key=rustfsadmin", ""].join("\n"),
 		);
 		process.env.AWS_CONFIG_FILE = cfg;
 		process.env.AWS_SHARED_CREDENTIALS_FILE = cred;
@@ -68,9 +52,6 @@ describe("RustFS S3 factory integration", () => {
 			profile: "rust",
 			region: "us-east-1",
 		});
-		expect(
-			(await (await factory.get(profile)).send(new ListBucketsCommand({})))
-				.Buckets,
-		).toBeDefined();
+		expect((await (await factory.get(profile)).send(new ListBucketsCommand({}))).Buckets).toBeDefined();
 	});
 });

@@ -4,25 +4,21 @@ import { Toaster as Sonner, type ToasterProps } from "sonner";
 export function Toaster({ ...props }: ToasterProps) {
 	return (
 		<Sonner
-			theme="light"
-			className="toaster group"
+			theme="system"
 			toastOptions={{
 				classNames: {
-					toast:
-						"group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-(--elevation-md)",
-					description: "group-[.toast]:text-muted-foreground",
-					actionButton:
-						"group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-					cancelButton:
-						"group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+					toast: "!shadow-overlay",
+					description: "!text-foreground-secondary",
+					actionButton: "!bg-accent !text-accent-foreground",
+					cancelButton: "!bg-foreground/[0.06] !text-foreground-secondary",
 				},
 			}}
 			style={
 				{
-					"--normal-bg": "var(--surface-neutral-01)",
-					"--normal-text": "var(--text-default)",
-					"--normal-border": "var(--border-subtle)",
-					"--border-radius": "var(--radius-modal)",
+					"--normal-bg": "var(--color-elevated)",
+					"--normal-text": "var(--color-foreground)",
+					"--normal-border": "var(--color-separator)",
+					"--border-radius": "var(--radius-overlay)",
 				} as React.CSSProperties
 			}
 			{...props}

@@ -4,12 +4,10 @@ import { mapSsoError, ssoLogin } from "../../src/main/sso";
 
 describe("SSO helpers", () => {
 	it("maps missing and expired SDK token errors but ignores unrelated failures", () => {
-		expect(
-			mapSsoError(
-				{ name: "TokenProviderError", message: "Token is expired." },
-				"dev",
-			),
-		).toEqual({ code: "SSO_LOGIN_REQUIRED", profile: "dev" });
+		expect(mapSsoError({ name: "TokenProviderError", message: "Token is expired." }, "dev")).toEqual({
+			code: "SSO_LOGIN_REQUIRED",
+			profile: "dev",
+		});
 		expect(
 			mapSsoError(
 				{
@@ -49,10 +47,7 @@ describe("SSO helpers", () => {
 			return child;
 		};
 		expect(await ssoLogin("dev", { spawn })).toEqual({ ok: true });
-		expect(spawnArgs.slice(0, 2)).toEqual([
-			"aws",
-			["sso", "login", "--profile", "dev"],
-		]);
+		expect(spawnArgs.slice(0, 2)).toEqual(["aws", ["sso", "login", "--profile", "dev"]]);
 		expect(spawnArgs[2]).not.toHaveProperty("shell");
 		expect(spawnArgs[2].stdio).toBe("ignore");
 
@@ -70,12 +65,7 @@ describe("SSO helpers", () => {
 	it("maps ENOENT to CLI_MISSING, including a real spawn with an empty PATH", async () => {
 		const missingSpawn: any = () => {
 			const child = new EventEmitter();
-			queueMicrotask(() =>
-				child.emit(
-					"error",
-					Object.assign(new Error("missing"), { code: "ENOENT" }),
-				),
-			);
+			queueMicrotask(() => child.emit("error", Object.assign(new Error("missing"), { code: "ENOENT" })));
 			return child;
 		};
 		expect(await ssoLogin("dev", { spawn: missingSpawn })).toEqual({

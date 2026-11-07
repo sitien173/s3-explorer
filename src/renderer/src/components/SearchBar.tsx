@@ -1,24 +1,16 @@
-import {
-	useEffect,
-	useRef,
-	useState,
-	type ChangeEvent,
-	type FormEvent,
-	type JSX,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type JSX } from "react";
 import type { S3Item } from "../format";
 import { api, unwrap } from "../api";
+import { AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Spinner } from "./ui/spinner";
 
 export interface SearchBarProps {
 	connectionId: string;
 	bucket: string;
 	prefix: string;
-	onSearchResults: (
-		results: S3Item[],
-		isDone: boolean,
-		truncated: boolean,
-	) => void;
+	onSearchResults: (results: S3Item[], isDone: boolean, truncated: boolean) => void;
 	onSearchCleared: () => void;
 	isSearchActive: boolean;
 }
@@ -49,7 +41,7 @@ export function SearchBar({
 	const unsubsRef = useRef<Array<() => void>>([]);
 	const matchesRef = useRef<S3Item[]>([]);
 
-	function cleanupListeners(): void {
+	const cleanupListeners = useCallback((): void => {
 		for (const unsub of unsubsRef.current) {
 			try {
 				unsub();
@@ -58,7 +50,7 @@ export function SearchBar({
 			}
 		}
 		unsubsRef.current = [];
-	}
+	}, []);
 
 	useEffect(() => {
 		return () => {
@@ -68,7 +60,7 @@ export function SearchBar({
 				void api.search.cancel({ jobId: activeId });
 			}
 		};
-	}, []);
+	}, [cleanupListeners]);
 
 	async function handleStartSearch(event: FormEvent): Promise<void> {
 		event.preventDefault();
@@ -182,35 +174,31 @@ export function SearchBar({
 	}
 
 	return (
-		<div className="app-search-bar-container">
+		<div className="relative flex items-center gap-1.5">
 			<form
-				className="app-search-form"
+				className="flex items-center gap-1.5"
 				onSubmit={(e) => {
 					void handleStartSearch(e);
 				}}
 			>
-				<div className="tds-text-input app-search-input-wrapper">
-					<input
-						type="text"
-						className="tds-text-input__field app-search-field"
-						value={query}
-						onChange={(e: ChangeEvent<HTMLInputElement>) => {
-							setQuery(e.target.value);
-						}}
-						placeholder={`Search objects in ${bucket}/${prefix}...`}
-					/>
-				</div>
-				<Button
-					type="submit"
-					variant="secondary"
-					disabled={running || !query.trim()}
-				>
+				<Input
+					type="text"
+					className="app-no-drag h-7 w-36 text-xs sm:w-48 lg:w-56"
+					value={query}
+					onChange={(e: ChangeEvent<HTMLInputElement>) => {
+						setQuery(e.target.value);
+					}}
+					placeholder={`Search in ${bucket}/${prefix}...`}
+				/>
+				<Button type="submit" variant="secondary" size="sm" className="app-no-drag" disabled={running || !query.trim()}>
 					Search
 				</Button>
 				{running && (
 					<Button
 						type="button"
 						variant="secondary"
+						size="sm"
+						className="app-no-drag"
 						onClick={() => {
 							void handleCancelSearch();
 						}}
@@ -219,43 +207,32 @@ export function SearchBar({
 					</Button>
 				)}
 				{isSearchActive && !running && (
-					<Button
-						type="button"
-						variant="secondary"
-						onClick={handleClear}
-					>
+					<Button type="button" variant="secondary" size="sm" className="app-no-drag" onClick={handleClear}>
 						Clear results
 					</Button>
 				)}
 			</form>
 
-			{running && (
-				<div className="app-search-status">
-					<div className="tds-spinner tds-spinner--xs" />
-					<span className="app-search-status-text">
-						Scanned: {scanned.toLocaleString()} | Matched:{" "}
-						{matched.toLocaleString()}
-					</span>
-				</div>
-			)}
-
-			{truncated && (
-				<div className="tds-announcement tds-announcement--warning app-search-banner">
-					<div className="tds-announcement__content">
-						<div className="tds-announcement__message">
-							Search results truncated at maximum limit.
+			{(running || truncated || searchError) && (
+				<div className="absolute top-full left-0 z-30 mt-1 flex flex-col gap-1 rounded-surface border border-separator bg-elevated p-2 text-xs text-foreground shadow-overlay">
+					{running && (
+						<div className="flex items-center gap-1.5 text-xs text-foreground-secondary">
+							<Spinner className="size-3" />
+							<span>
+								Scanned: {scanned.toLocaleString()} | Matched: {matched.toLocaleString()}
+							</span>
 						</div>
-					</div>
-				</div>
-			)}
-
-			{searchError && (
-				<div className="tds-announcement tds-announcement--error app-search-banner">
-					<div className="tds-announcement__content">
-						<div className="tds-announcement__message">
-							{searchError}
+					)}
+					{truncated && (
+						<div className="text-xs text-foreground-secondary">
+							<AlertDescription>Search results truncated at maximum limit.</AlertDescription>
 						</div>
-					</div>
+					)}
+					{searchError && (
+						<div className="text-xs text-destructive">
+							<AlertDescription>{searchError}</AlertDescription>
+						</div>
+					)}
 				</div>
 			)}
 		</div>

@@ -140,10 +140,7 @@ export async function openWithSystemApp(
 		}
 
 		if (!response.ok) {
-			throw codedError(
-				"REQUEST_FAILED",
-				`Proxy request failed with status ${response.status}`,
-			);
+			throw codedError("REQUEST_FAILED", `Proxy request failed with status ${response.status}`);
 		}
 
 		const body = response.body;
@@ -151,9 +148,7 @@ export async function openWithSystemApp(
 			throw codedError("REQUEST_FAILED", "Response body is empty");
 		}
 
-		const readable = Readable.fromWeb(
-			body as import("node:stream/web").ReadableStream,
-		);
+		const readable = Readable.fromWeb(body as import("node:stream/web").ReadableStream);
 
 		const out = createWriteStream(targetPath);
 		await pipeline(readable, out);
@@ -168,9 +163,7 @@ export async function openWithSystemApp(
 		clearTimeout(timer);
 		activeTempDirs.delete(tempDir);
 		await rm(targetPath, { force: true }).catch(() => undefined);
-		await rm(tempDir, { recursive: true, force: true }).catch(
-			() => undefined,
-		);
+		await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
 		throw error;
 	}
 }

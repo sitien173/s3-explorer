@@ -1,6 +1,4 @@
-export type RangeSpec =
-	| { kind: "bytes"; start: number; end?: number }
-	| { kind: "suffix"; length: number };
+export type RangeSpec = { kind: "bytes"; start: number; end?: number } | { kind: "suffix"; length: number };
 
 export function parseRange(header: string | undefined): RangeSpec | null {
 	if (header === undefined) return null;

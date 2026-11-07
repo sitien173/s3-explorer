@@ -1,7 +1,4 @@
-import type {
-	CreateRequest,
-	UpdateRequest,
-} from "../../shared/ipc";
+import type { CreateRequest, UpdateRequest } from "../../shared/ipc";
 
 export interface BucketItem {
 	name: string;
@@ -67,10 +64,7 @@ export function buildCreateRequest(state: ConnectionFormState): CreateRequest {
 	};
 }
 
-export function buildUpdateRequest(
-	id: string,
-	state: ConnectionFormState,
-): UpdateRequest {
+export function buildUpdateRequest(id: string, state: ConnectionFormState): UpdateRequest {
 	const name = state.name.trim();
 	const region = state.region?.trim() || null;
 	const endpoint = state.endpoint?.trim() || null;
@@ -108,14 +102,11 @@ export function formatBytes(bytes: number): string {
 	if (idx === 0) {
 		return `${bytes} B`;
 	}
-	const value = bytes / Math.pow(1024, idx);
+	const value = bytes / 1024 ** idx;
 	return `${value.toFixed(1)} ${units[idx]}`;
 }
 
-export function filterByName<T extends { name: string }>(
-	items: T[],
-	query: string,
-): T[] {
+export function filterByName<T extends { name: string }>(items: T[], query: string): T[] {
 	const trimmed = query.trim().toLowerCase();
 	if (!trimmed) {
 		return items;
@@ -169,10 +160,7 @@ export interface PageResponse {
 	nextToken?: string;
 }
 
-export function parseBreadcrumbs(
-	bucket: string,
-	prefix: string,
-): BreadcrumbSegment[] {
+export function parseBreadcrumbs(bucket: string, prefix: string): BreadcrumbSegment[] {
 	const segments: BreadcrumbSegment[] = [{ name: bucket, prefix: "" }];
 	if (!prefix) {
 		return segments;
@@ -189,15 +177,9 @@ export function parseBreadcrumbs(
 	return segments;
 }
 
-export function mergeFoldersAndObjects(
-	currentPrefix: string,
-	folders: string[],
-	objects: S3Item[],
-): BrowserRow[] {
+export function mergeFoldersAndObjects(currentPrefix: string, folders: string[], objects: S3Item[]): BrowserRow[] {
 	const folderRows: FolderRow[] = folders.map((f) => {
-		const rel = f.startsWith(currentPrefix)
-			? f.slice(currentPrefix.length)
-			: f;
+		const rel = f.startsWith(currentPrefix) ? f.slice(currentPrefix.length) : f;
 		return {
 			kind: "folder",
 			name: rel,
@@ -206,9 +188,7 @@ export function mergeFoldersAndObjects(
 	});
 
 	const objectRows: ObjectRow[] = objects.map((obj) => {
-		const rel = obj.key.startsWith(currentPrefix)
-			? obj.key.slice(currentPrefix.length)
-			: obj.key;
+		const rel = obj.key.startsWith(currentPrefix) ? obj.key.slice(currentPrefix.length) : obj.key;
 		return {
 			kind: "object",
 			name: rel,
@@ -222,10 +202,7 @@ export function mergeFoldersAndObjects(
 	return [...folderRows, ...objectRows];
 }
 
-export function filterBrowserRows(
-	rows: BrowserRow[],
-	query: string,
-): BrowserRow[] {
+export function filterBrowserRows(rows: BrowserRow[], query: string): BrowserRow[] {
 	const trimmed = query.trim().toLowerCase();
 	if (!trimmed) {
 		return rows;
@@ -239,10 +216,7 @@ export function isStaleResponse(
 	responseRequestId: number,
 	responsePrefix: string,
 ): boolean {
-	return (
-		responseRequestId !== currentRequestId ||
-		responsePrefix !== currentPrefix
-	);
+	return responseRequestId !== currentRequestId || responsePrefix !== currentPrefix;
 }
 
 export function applyPageResponse(
@@ -250,14 +224,7 @@ export function applyPageResponse(
 	response: PageResponse,
 	isAppend: boolean,
 ): PageState | null {
-	if (
-		isStaleResponse(
-			currentState.requestId,
-			currentState.prefix,
-			response.requestId,
-			response.prefix,
-		)
-	) {
+	if (isStaleResponse(currentState.requestId, currentState.prefix, response.requestId, response.prefix)) {
 		return null;
 	}
 
@@ -286,12 +253,7 @@ export function shouldResetInFlight(
 	responseRequestId: number,
 	responsePrefix: string,
 ): boolean {
-	return !isStaleResponse(
-		activeRequestId,
-		activePrefix,
-		responseRequestId,
-		responsePrefix,
-	);
+	return !isStaleResponse(activeRequestId, activePrefix, responseRequestId, responsePrefix);
 }
 
 export function shouldAutoPage(

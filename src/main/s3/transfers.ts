@@ -7,11 +7,7 @@ import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import type { SenderLike } from "../ipc/register";
 import { events } from "../../shared/channels";
-import {
-	transferDonePayloadSchema,
-	transferProgressPayloadSchema,
-	type IpcError,
-} from "../../shared/ipc";
+import { transferDonePayloadSchema, transferProgressPayloadSchema, type IpcError } from "../../shared/ipc";
 import { mapS3Error } from "../ipc/browse";
 
 type CommonInput = {
@@ -29,16 +25,8 @@ type Progress = (loaded: number, total: number) => void;
 // is "completed" even if cancel was requested. A runner that observes the
 // abort signal must reject. A rejection after a cancel request is "cancelled".
 export type Runners = {
-	upload: (
-		input: UploadInput,
-		signal: AbortSignal,
-		onProgress: Progress,
-	) => Promise<void>;
-	download: (
-		input: DownloadInput,
-		signal: AbortSignal,
-		onProgress: Progress,
-	) => Promise<void>;
+	upload: (input: UploadInput, signal: AbortSignal, onProgress: Progress) => Promise<void>;
+	download: (input: DownloadInput, signal: AbortSignal, onProgress: Progress) => Promise<void>;
 };
 
 type EntryState = {
@@ -55,27 +43,19 @@ type Entry =
 	| (EntryState & { kind: "upload"; input: UploadInput })
 	| (EntryState & { kind: "download"; input: DownloadInput });
 
-type EntryInput =
-	| { kind: "upload"; input: UploadInput }
-	| { kind: "download"; input: DownloadInput };
+type EntryInput = { kind: "upload"; input: UploadInput } | { kind: "download"; input: DownloadInput };
 
 function errorFromSignal(signal: AbortSignal): Error {
 	return signal.reason instanceof Error ? signal.reason : new Error("Aborted");
 }
 
-async function uploadRunner(
-	input: UploadInput,
-	signal: AbortSignal,
-	onProgress: Progress,
-): Promise<void> {
+async function uploadRunner(input: UploadInput, signal: AbortSignal, onProgress: Progress): Promise<void> {
 	const file = await stat(input.localPath);
 	if (signal.aborted) throw errorFromSignal(signal);
 	const body = createReadStream(input.localPath);
 	let upload: Upload | undefined;
 	let abort: (() => void) | undefined;
-	let progressListener:
-		| ((progress: { loaded?: number; total?: number }) => void)
-		| undefined;
+	let progressListener: ((progress: { loaded?: number; total?: number }) => void) | undefined;
 	try {
 		upload = new Upload({
 			client: input.client,
@@ -108,19 +88,12 @@ async function uploadRunner(
 	}
 }
 
-async function downloadRunner(
-	input: DownloadInput,
-	signal: AbortSignal,
-	onProgress: Progress,
-): Promise<void> {
-	const partPath = input.id
-		? `${input.destPath}.${input.id}.part`
-		: `${input.destPath}.part`;
+async function downloadRunner(input: DownloadInput, signal: AbortSignal, onProgress: Progress): Promise<void> {
+	const partPath = input.id ? `${input.destPath}.${input.id}.part` : `${input.destPath}.part`;
 	try {
-		const response = await input.client.send(
-			new GetObjectCommand({ Bucket: input.bucket, Key: input.key }),
-			{ abortSignal: signal },
-		);
+		const response = await input.client.send(new GetObjectCommand({ Bucket: input.bucket, Key: input.key }), {
+			abortSignal: signal,
+		});
 		const body: unknown = response.Body;
 		if (!(body instanceof Readable)) throw new Error("Download body is not readable");
 
@@ -247,28 +220,16 @@ export class TransferManager {
 			};
 			let task: Promise<void>;
 			try {
-				task = entry.kind === "upload"
-					? this.runners.upload(
-							entry.input,
-							entry.controller.signal,
-							onProgress,
-						)
-					: this.runners.download(
-							entry.input,
-							entry.controller.signal,
-							onProgress,
-						);
+				task =
+					entry.kind === "upload"
+						? this.runners.upload(entry.input, entry.controller.signal, onProgress)
+						: this.runners.download(entry.input, entry.controller.signal, onProgress);
 			} catch (error) {
 				task = Promise.reject(error);
 			}
 			void task.then(
 				() => this.finish(entry, "completed"),
-				(error: unknown) =>
-					this.finish(
-						entry,
-						entry.cancelled ? "cancelled" : "failed",
-						error,
-					),
+				(error: unknown) => this.finish(entry, entry.cancelled ? "cancelled" : "failed", error),
 			);
 		}
 	}
@@ -298,20 +259,14 @@ export class TransferManager {
 			let safeError: IpcError | undefined;
 			if (status === "failed" && error !== undefined) {
 				const mappedError = mapS3Error(error);
-				const localPaths = entry.kind === "upload"
-					? [entry.input.localPath]
-					: [
-							`${entry.input.destPath}.${entry.id}.part`,
-							`${entry.input.destPath}.part`,
-							entry.input.destPath,
-						];
+				const localPaths =
+					entry.kind === "upload"
+						? [entry.input.localPath]
+						: [`${entry.input.destPath}.${entry.id}.part`, `${entry.input.destPath}.part`, entry.input.destPath];
 				localPaths.sort((left, right) => right.length - left.length);
 				safeError = {
 					...mappedError,
-					message: localPaths.reduce(
-						(message, path) => message.split(path).join("[local file]"),
-						mappedError.message,
-					),
+					message: localPaths.reduce((message, path) => message.split(path).join("[local file]"), mappedError.message),
 				};
 			}
 			const payload = transferDonePayloadSchema.parse({

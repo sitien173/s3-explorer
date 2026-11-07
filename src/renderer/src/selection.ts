@@ -24,10 +24,7 @@ export type SelectionAction =
 	| { type: "clear" }
 	| { type: "reset" };
 
-export function selectionReducer(
-	state: SelectionState,
-	action: SelectionAction,
-): SelectionState {
+export function selectionReducer(state: SelectionState, action: SelectionAction): SelectionState {
 	if (action.type === "replace") return action.state;
 	if (action.type === "reset") return initialSelection;
 	if (action.type === "clear") return { ...initialSelection };
@@ -59,18 +56,16 @@ export function selectionReducer(
 				anchor,
 			};
 		}
-		const anchor = state.anchor && keys.includes(state.anchor)
-			? state.anchor
-			: state.active && keys.includes(state.active)
-				? state.active
-				: key;
+		const anchor =
+			state.anchor && keys.includes(state.anchor)
+				? state.anchor
+				: state.active && keys.includes(state.active)
+					? state.active
+					: key;
 		const anchorIndex = keys.indexOf(anchor);
 		const keyIndex = keys.indexOf(key);
 		return {
-			selected: keys.slice(
-					Math.min(anchorIndex, keyIndex),
-					Math.max(anchorIndex, keyIndex) + 1,
-				),
+			selected: keys.slice(Math.min(anchorIndex, keyIndex), Math.max(anchorIndex, keyIndex) + 1),
 			active: key,
 			anchor,
 		};
@@ -84,26 +79,18 @@ export function selectionReducer(
 			? 0
 			: action.type === "end"
 				? keys.length - 1
-				: Math.max(
-						0,
-						Math.min(
-							keys.length - 1,
-							currentIndex + (action.delta ?? 0) * step,
-						),
-					);
+				: Math.max(0, Math.min(keys.length - 1, currentIndex + (action.delta ?? 0) * step));
 	const key = keys[index];
 	if (action.extend) {
-		const anchor = state.anchor && keys.includes(state.anchor)
-			? state.anchor
-			: state.active && keys.includes(state.active)
-				? state.active
-				: startKey;
+		const anchor =
+			state.anchor && keys.includes(state.anchor)
+				? state.anchor
+				: state.active && keys.includes(state.active)
+					? state.active
+					: startKey;
 		const anchorIndex = keys.indexOf(anchor);
 		return {
-			selected: keys.slice(
-					Math.min(anchorIndex, index),
-					Math.max(anchorIndex, index) + 1,
-				),
+			selected: keys.slice(Math.min(anchorIndex, index), Math.max(anchorIndex, index) + 1),
 			active: key,
 			anchor,
 		};
@@ -121,14 +108,7 @@ export interface KeyboardInput {
 }
 
 export function keyboardAction(event: KeyboardInput): string | null {
-	const {
-		key,
-		shiftKey,
-		altKey,
-		ctrlKey,
-		metaKey,
-		selectionCount = 0,
-	} = event;
+	const { key, shiftKey, altKey, ctrlKey, metaKey, selectionCount = 0 } = event;
 	if ((altKey && key === "ArrowUp") || key === "Backspace") return "parent";
 	if ((ctrlKey || metaKey) && key.toLowerCase() === "a") return "select-all";
 	if (key === "ArrowUp" || key === "ArrowDown") {
@@ -139,7 +119,7 @@ export function keyboardAction(event: KeyboardInput): string | null {
 	if (key === "End") return "end";
 	if (key === "PageUp") return "page-up";
 	if (key === "PageDown") return "page-down";
-	if (key === " " || key === "Space") return "toggle";
+	if (key === " " || key === "Space") return ctrlKey || metaKey ? "toggle" : "quicklook";
 	if (key === "Escape") return "clear";
 	if (key === "Enter") return selectionCount === 1 ? "open" : null;
 	if (key === "Delete") return "delete";

@@ -1,12 +1,8 @@
-import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-	type JSX,
-	type SyntheticEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type JSX, type SyntheticEvent } from "react";
 import { isMkv } from "../../mediaKind";
+import { AlertDescription, AlertTitle, BANNER_DESTRUCTIVE_CLASS, BANNER_SEPARATOR_CLASS } from "../ui/alert";
+import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
 
 export interface MediaViewProps {
 	url: string;
@@ -15,6 +11,7 @@ export interface MediaViewProps {
 	fileName: string;
 	kind: "video" | "audio";
 	onOpenWithSystemApp: () => void;
+	onLoadError?: () => void;
 }
 
 export function MediaView({
@@ -23,10 +20,9 @@ export function MediaView({
 	objectKey,
 	kind,
 	onOpenWithSystemApp,
+	onLoadError,
 }: MediaViewProps): JSX.Element {
-	const [errorState, setErrorState] = useState<
-		"none" | "unsupported" | "interrupted"
-	>("none");
+	const [errorState, setErrorState] = useState<"none" | "unsupported" | "interrupted">("none");
 	const [showMkvNotice, setShowMkvNotice] = useState<boolean>(false);
 	const [retryKey, setRetryKey] = useState<number>(0);
 
@@ -39,6 +35,19 @@ export function MediaView({
 		return kind === "video" ? videoRef.current : audioRef.current;
 	}, [kind]);
 
+	// Unload on unmount so a closed or replaced preview never keeps playing.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: retryKey remounts the element, so the old one must unload
+	useEffect(() => {
+		const el = kind === "video" ? videoRef.current : audioRef.current;
+		return () => {
+			if (!el) return;
+			el.pause();
+			el.removeAttribute("src");
+			el.load();
+		};
+	}, [kind, retryKey]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: url is a reset trigger
 	useEffect(() => {
 		setErrorState("none");
 		setShowMkvNotice(false);
@@ -48,6 +57,10 @@ export function MediaView({
 
 	const handleError = useCallback(
 		(_e: SyntheticEvent<HTMLMediaElement>): void => {
+			if (onLoadError) {
+				onLoadError();
+				return;
+			}
 			const el = getMediaElement();
 			const code = el?.error?.code;
 			if (code === 4) {
@@ -58,7 +71,7 @@ export function MediaView({
 				setErrorState("unsupported");
 			}
 		},
-		[getMediaElement],
+		[getMediaElement, onLoadError],
 	);
 
 	const handlePlay = useCallback((): void => {
@@ -72,20 +85,12 @@ export function MediaView({
 		}
 		lastTimeRef.current = el.currentTime;
 
-		if (
-			kind === "video" &&
-			isMkv(contentType, objectKey) &&
-			!showMkvNotice &&
-			el.currentTime >= 3
-		) {
+		if (kind === "video" && isMkv(contentType, objectKey) && !showMkvNotice && el.currentTime >= 3) {
 			const extended = el as unknown as {
 				mozHasAudio?: boolean;
 				webkitAudioDecodedByteCount?: number;
 			};
-			if (
-				extended.mozHasAudio === false ||
-				extended.webkitAudioDecodedByteCount === 0
-			) {
+			if (extended.mozHasAudio === false || extended.webkitAudioDecodedByteCount === 0) {
 				setShowMkvNotice(true);
 			}
 		}
@@ -106,10 +111,7 @@ export function MediaView({
 			const extended = el as unknown as {
 				audioTracks?: { length: number };
 			};
-			if (
-				extended.audioTracks !== undefined &&
-				extended.audioTracks.length === 0
-			) {
+			if (extended.audioTracks !== undefined && extended.audioTracks.length === 0) {
 				setShowMkvNotice(true);
 			}
 		}
@@ -121,89 +123,68 @@ export function MediaView({
 	}, []);
 
 	return (
-		<div className="app-media-view">
+		<div className="flex h-full w-full flex-col items-center justify-center p-3">
 			{showMkvNotice && (
-				<div className="tds-announcement tds-announcement--warning app-viewer-notice">
-					<div className="tds-announcement__content">
-						<div className="tds-announcement__title">
-							No audio track detected
-						</div>
-						<div className="tds-announcement__message">
-							This MKV video may use an audio format unsupported by the
-							built-in player.
-						</div>
+				<div className={cn("m-2 shrink-0", BANNER_SEPARATOR_CLASS)}>
+					<div className="min-w-0 flex-1">
+						<AlertTitle>No audio track detected</AlertTitle>
+						<AlertDescription>
+							This MKV video may use an audio format unsupported by the built-in player.
+						</AlertDescription>
 					</div>
-					<div className="tds-announcement__actions">
-						<button
-							type="button"
-							className="tds-btn tds-btn--sm tds-btn--secondary"
-							onClick={onOpenWithSystemApp}
-						>
+					<div className="flex shrink-0 items-center">
+						<Button type="button" size="sm" variant="secondary" onClick={onOpenWithSystemApp}>
 							Open with system app
-						</button>
+						</Button>
 					</div>
 				</div>
 			)}
 
 			{errorState === "unsupported" ? (
-				<div className="tds-announcement tds-announcement--negative app-viewer-announcement">
-					<div className="tds-announcement__content">
-						<div className="tds-announcement__title">
-							Format not supported
-						</div>
-						<div className="tds-announcement__message">
-							The media format cannot be played in the browser.
-						</div>
+				<div className={cn("m-2 shrink-0", BANNER_DESTRUCTIVE_CLASS)}>
+					<div className="min-w-0 flex-1">
+						<AlertTitle>Format not supported</AlertTitle>
+						<AlertDescription>The media format cannot be played in the browser.</AlertDescription>
 					</div>
-					<div className="tds-announcement__actions">
-						<button
-							type="button"
-							className="tds-btn tds-btn--sm tds-btn--primary"
-							onClick={onOpenWithSystemApp}
-						>
+					<div className="flex shrink-0 items-center">
+						<Button type="button" size="sm" onClick={onOpenWithSystemApp}>
 							Open with system app
-						</button>
+						</Button>
 					</div>
 				</div>
 			) : errorState === "interrupted" ? (
-				<div className="tds-announcement tds-announcement--warning app-viewer-announcement">
-					<div className="tds-announcement__content">
-						<div className="tds-announcement__title">
-							Playback interrupted
-						</div>
-						<div className="tds-announcement__message">
-							Stream connection interrupted during playback.
-						</div>
+				<div className={cn("m-2 shrink-0", BANNER_SEPARATOR_CLASS)}>
+					<div className="min-w-0 flex-1">
+						<AlertTitle>Playback interrupted</AlertTitle>
+						<AlertDescription>Stream connection interrupted during playback.</AlertDescription>
 					</div>
-					<div className="tds-announcement__actions">
-						<button
-							type="button"
-							className="tds-btn tds-btn--sm tds-btn--secondary"
-							onClick={handleRetry}
-						>
+					<div className="flex shrink-0 items-center">
+						<Button type="button" size="sm" variant="secondary" onClick={handleRetry}>
 							Retry
-						</button>
+						</Button>
 					</div>
 				</div>
 			) : kind === "video" ? (
+				// biome-ignore lint/a11y/useMediaCaption: S3 objects carry no caption tracks
 				<video
 					key={retryKey}
 					ref={videoRef}
 					controls
 					src={url}
-					className="app-media-player app-media-player--video"
+					className="h-auto max-h-120 w-full max-w-full rounded-surface bg-foreground/[0.06]"
 					onError={handleError}
 					onPlay={handlePlay}
 					onTimeUpdate={handleTimeUpdate}
 					onLoadedMetadata={handleLoadedMetadata}
 				/>
 			) : (
+				// biome-ignore lint/a11y/useMediaCaption: S3 objects carry no caption tracks
 				<audio
 					key={retryKey}
 					ref={audioRef}
 					controls
 					src={url}
-					className="app-media-player app-media-player--audio"
+					className="my-auto max-h-full w-full max-w-full"
 					onError={handleError}
 					onPlay={handlePlay}
 					onTimeUpdate={handleTimeUpdate}

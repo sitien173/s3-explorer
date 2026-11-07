@@ -51,10 +51,7 @@ void app.whenReady().then(async () => {
 			cleanupOpenExternal();
 		});
 	} catch {
-		dialog.showErrorBox(
-			"S3 Media Explorer",
-			"S3 Media Explorer could not start.",
-		);
+		dialog.showErrorBox("S3 Media Explorer", "S3 Media Explorer could not start.");
 		app.quit();
 	}
 });

@@ -1,16 +1,56 @@
 // @vitest-environment jsdom
 import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { Toaster } from "../../src/renderer/src/components/ui/sonner";
 import { notify, toastBuilders } from "../../src/renderer/src/toasts";
 import { OperationReport } from "../../src/renderer/src/components/OperationReport";
 
-afterEach(() => {
+afterEach(async () => {
+	// Drain Sonner's post-create and dismiss timers before jsdom teardown.
+	await act(async () => {
+		toast.dismiss();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
 	cleanup();
 	vi.clearAllMocks();
 });
+
+function TestHarness() {
+	const [isReportOpen, setIsReportOpen] = React.useState(false);
+	const [report, setReport] = React.useState<{
+		completedCount: number;
+		remainingKeys: string[];
+	} | null>(null);
+
+	const triggerPartialFailure = () => {
+		const rep = { completedCount: 3, remainingKeys: ["rem1.txt", "rem2.txt"] };
+		setReport(rep);
+		setIsReportOpen(true);
+		notify.partialFailure({ completedCount: rep.completedCount, remainingCount: rep.remainingKeys.length }, () => {
+			setIsReportOpen(true);
+		});
+	};
+
+	return (
+		<>
+			<Toaster />
+			<button type="button" onClick={triggerPartialFailure}>
+				Simulate Failure
+			</button>
+			{report && (
+				<OperationReport
+					isOpen={isReportOpen}
+					completedCount={report.completedCount}
+					remainingKeys={report.remainingKeys}
+					onClose={() => setIsReportOpen(false)}
+				/>
+			)}
+		</>
+	);
+}
 
 describe("renderer toasts DOM integration", () => {
 	it("renders Toaster with an aria-live region for announcements", async () => {
@@ -33,43 +73,6 @@ describe("renderer toasts DOM integration", () => {
 
 	it("reopens OperationReport when partial-failure toast action is clicked", async () => {
 		const user = userEvent.setup();
-
-		function TestHarness() {
-			const [isReportOpen, setIsReportOpen] = React.useState(false);
-			const [report, setReport] = React.useState<{
-				completedCount: number;
-				remainingKeys: string[];
-			} | null>(null);
-
-			const triggerPartialFailure = () => {
-				const rep = { completedCount: 3, remainingKeys: ["rem1.txt", "rem2.txt"] };
-				setReport(rep);
-				setIsReportOpen(true);
-				notify.partialFailure(
-					{ completedCount: rep.completedCount, remainingCount: rep.remainingKeys.length },
-					() => {
-						setIsReportOpen(true);
-					},
-				);
-			};
-
-			return (
-				<>
-					<Toaster />
-					<button type="button" onClick={triggerPartialFailure}>
-						Simulate Failure
-					</button>
-					{report && (
-						<OperationReport
-							isOpen={isReportOpen}
-							completedCount={report.completedCount}
-							remainingKeys={report.remainingKeys}
-							onClose={() => setIsReportOpen(false)}
-						/>
-					)}
-				</>
-			);
-		}
 
 		render(<TestHarness />);
 

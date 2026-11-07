@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HandleRegistry, type HandleTarget } from "../../src/main/stream/handles";
+import { HandleRegistry, MAX_HANDLES, type HandleTarget } from "../../src/main/stream/handles";
 
 const s3Target: HandleTarget = {
 	kind: "s3",
@@ -65,9 +65,7 @@ describe("HandleRegistry", () => {
 	});
 
 	it("returns undefined for an unknown valid-looking handle", () => {
-		expect(new HandleRegistry().get("00000000000000000000000000000000")).toBe(
-			undefined,
-		);
+		expect(new HandleRegistry().get("00000000000000000000000000000000")).toBe(undefined);
 	});
 
 	it.each([
@@ -87,9 +85,7 @@ describe("HandleRegistry", () => {
 		const registry = new HandleRegistry();
 		const handle = registry.create(s3Target);
 		expect(registry.get(handle)).toBeDefined();
-		const uppercaseHandle = /[a-f]/.test(handle)
-			? handle.toUpperCase()
-			: "ABCDEF0123456789ABCDEF0123456789";
+		const uppercaseHandle = /[a-f]/.test(handle) ? handle.toUpperCase() : "ABCDEF0123456789ABCDEF0123456789";
 		expect(registry.get(uppercaseHandle)).toBeUndefined();
 	});
 
@@ -101,5 +97,108 @@ describe("HandleRegistry", () => {
 		registry.clear();
 		expect(registry.size).toBe(0);
 		expect(registry.get(handle)).toBeUndefined();
+	});
+
+	it("has a capacity of 1,024 and evicts the least recently used entry on the 1,025th target", () => {
+		expect(MAX_HANDLES).toBe(1024);
+		const registry = new HandleRegistry();
+		const handles: string[] = [];
+		for (let index = 0; index < MAX_HANDLES; index += 1) {
+			handles.push(
+				registry.create({
+					kind: "s3",
+					connectionId: "connection-1",
+					bucket: "media",
+					key: `object-${index}`,
+				}),
+			);
+		}
+		expect(registry.size).toBe(1024);
+		const extraHandle = registry.create({
+			kind: "s3",
+			connectionId: "connection-1",
+			bucket: "media",
+			key: "object-1024",
+		});
+		expect(registry.size).toBe(1024);
+		expect(registry.get(handles[0])).toBeUndefined();
+		expect(registry.get(handles[1])).toBeDefined();
+		expect(registry.get(extraHandle)).toBeDefined();
+	});
+
+	it("touches an entry on get so that it is spared from eviction", () => {
+		const registry = new HandleRegistry();
+		const handles: string[] = [];
+		for (let index = 0; index < MAX_HANDLES; index += 1) {
+			handles.push(
+				registry.create({
+					kind: "s3",
+					connectionId: "connection-1",
+					bucket: "media",
+					key: `object-${index}`,
+				}),
+			);
+		}
+		expect(registry.get(handles[0])).toBeDefined();
+		const extraHandle = registry.create({
+			kind: "s3",
+			connectionId: "connection-1",
+			bucket: "media",
+			key: "object-extra",
+		});
+		expect(registry.get(handles[0])).toBeDefined();
+		expect(registry.get(handles[1])).toBeUndefined();
+		expect(registry.get(extraHandle)).toBeDefined();
+	});
+
+	it("touches an entry on a dedupe hit in create so that it is spared from eviction", () => {
+		const registry = new HandleRegistry();
+		const targets: HandleTarget[] = [];
+		const handles: string[] = [];
+		for (let index = 0; index < MAX_HANDLES; index += 1) {
+			const target: HandleTarget = {
+				kind: "s3",
+				connectionId: "connection-1",
+				bucket: "media",
+				key: `object-${index}`,
+			};
+			targets.push(target);
+			handles.push(registry.create(target));
+		}
+		const deduped = registry.create(targets[0]);
+		expect(deduped).toBe(handles[0]);
+		const extraHandle = registry.create({
+			kind: "s3",
+			connectionId: "connection-1",
+			bucket: "media",
+			key: "object-extra",
+		});
+		expect(registry.get(handles[0])).toBeDefined();
+		expect(registry.get(handles[1])).toBeUndefined();
+		expect(registry.get(extraHandle)).toBeDefined();
+	});
+
+	it("assigns a new handle to an evicted target on create and old handle remains undefined", () => {
+		const registry = new HandleRegistry();
+		const target0: HandleTarget = {
+			kind: "s3",
+			connectionId: "connection-1",
+			bucket: "media",
+			key: "object-0",
+		};
+		const handle0 = registry.create(target0);
+		for (let index = 1; index <= MAX_HANDLES; index += 1) {
+			registry.create({
+				kind: "s3",
+				connectionId: "connection-1",
+				bucket: "media",
+				key: `object-${index}`,
+			});
+		}
+		expect(registry.get(handle0)).toBeUndefined();
+		const newHandle0 = registry.create(target0);
+		expect(newHandle0).not.toBe(handle0);
+		expect(registry.get(handle0)).toBeUndefined();
+		expect(registry.get(newHandle0)).toEqual(target0);
 	});
 });

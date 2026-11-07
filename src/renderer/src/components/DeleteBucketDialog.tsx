@@ -1,15 +1,9 @@
-import {
-	useEffect,
-	useId,
-	useRef,
-	useState,
-	type ChangeEvent,
-	type JSX,
-} from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type JSX } from "react";
 import { api } from "../api";
 import { buildOperationFailedToast, notify } from "../toasts";
 import { AlertDialog } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 export interface DeleteBucketDialogProps {
 	open: boolean;
@@ -46,6 +40,7 @@ export function DeleteBucketDialog({
 	const busyRef = useRef<boolean>(false);
 
 	// Capture the target only when the dialog opens; later prop changes must not retarget it.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: target is captured only on open transitions
 	useEffect(() => {
 		if (open) {
 			setTarget({ connectionName, connectionId, bucket });
@@ -55,7 +50,6 @@ export function DeleteBucketDialog({
 			setBusy(false);
 			busyRef.current = false;
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
 	if (!open) {
@@ -101,12 +95,7 @@ export function DeleteBucketDialog({
 			onClose={requestClose}
 			footer={
 				<>
-					<Button
-						type="button"
-						variant="secondary"
-						onClick={requestClose}
-						disabled={busy}
-					>
+					<Button type="button" variant="secondary" onClick={requestClose} disabled={busy}>
 						Cancel
 					</Button>
 					<Button
@@ -122,28 +111,25 @@ export function DeleteBucketDialog({
 				</>
 			}
 		>
-			<p className="app-delete-prompt">
-				Delete bucket <strong>{target.bucket}</strong> from connection{" "}
-				<strong>{target.connectionName}</strong>? Only an empty bucket
-				can be deleted. This cannot be undone.
+			<p className="m-0 text-sm text-foreground">
+				Delete bucket <strong>{target.bucket}</strong> from connection <strong>{target.connectionName}</strong>? Only an
+				empty bucket can be deleted. This cannot be undone.
 			</p>
-			<div
-				className={`tds-text-input app-dialog-field ${error ? "tds-text-input--error" : ""}`}
-			>
-				<label htmlFor={inputId} className="tds-field-label">
+			<div className="flex w-full min-w-0 flex-col gap-1">
+				<label htmlFor={inputId} className="text-xs font-medium text-foreground">
 					Type the bucket name to confirm
 				</label>
-				<input
+				<Input
 					id={inputId}
 					type="text"
-					className="tds-text-input__field"
+					className={error ? "border-destructive" : undefined}
 					value={typed}
 					onChange={(e: ChangeEvent<HTMLInputElement>) => {
 						setTyped(e.target.value);
 					}}
 					autoComplete="off"
 				/>
-				{error && <span className="tds-field-validation">{error}</span>}
+				{error && <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">{error}</span>}
 			</div>
 		</AlertDialog>
 	);

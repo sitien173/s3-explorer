@@ -31,12 +31,7 @@ describe("renderer format pure helpers", () => {
 				{ name: "orange", pinned: true, listed: true },
 			];
 			const sorted = sortBuckets(input);
-			expect(sorted.map((b) => b.name)).toEqual([
-				"apple",
-				"orange",
-				"zebra",
-				"banana",
-			]);
+			expect(sorted.map((b) => b.name)).toEqual(["apple", "orange", "zebra", "banana"]);
 		});
 
 		it("returns empty array for empty input", () => {
@@ -132,31 +127,19 @@ describe("renderer format pure helpers", () => {
 
 	describe("filterByName", () => {
 		it("filters items by case-insensitive substring", () => {
-			const items = [
-				{ name: "Report-2026.pdf" },
-				{ name: "photo.jpg" },
-				{ name: "ANNUAL-REPORT.DOCX" },
-			];
-			expect(filterByName(items, "report").map((i) => i.name)).toEqual([
-				"Report-2026.pdf",
-				"ANNUAL-REPORT.DOCX",
-			]);
+			const items = [{ name: "Report-2026.pdf" }, { name: "photo.jpg" }, { name: "ANNUAL-REPORT.DOCX" }];
+			expect(filterByName(items, "report").map((i) => i.name)).toEqual(["Report-2026.pdf", "ANNUAL-REPORT.DOCX"]);
 			expect(filterByName(items, "").length).toBe(3);
 		});
 	});
 
 	describe("parseBreadcrumbs", () => {
 		it("returns single root segment for empty prefix", () => {
-			expect(parseBreadcrumbs("my-bucket", "")).toEqual([
-				{ name: "my-bucket", prefix: "" },
-			]);
+			expect(parseBreadcrumbs("my-bucket", "")).toEqual([{ name: "my-bucket", prefix: "" }]);
 		});
 
 		it("returns hierarchical segments for nested prefixes", () => {
-			const segments = parseBreadcrumbs(
-				"my-bucket",
-				"documents/finance/2026/",
-			);
+			const segments = parseBreadcrumbs("my-bucket", "documents/finance/2026/");
 			expect(segments).toEqual([
 				{ name: "my-bucket", prefix: "" },
 				{ name: "documents", prefix: "documents/" },
@@ -216,10 +199,7 @@ describe("renderer format pure helpers", () => {
 				},
 			];
 			const filtered = filterBrowserRows(rows, "arch");
-			expect(filtered.map((r) => r.name)).toEqual([
-				"Archives/",
-				"archive-summary.csv",
-			]);
+			expect(filtered.map((r) => r.name)).toEqual(["Archives/", "archive-summary.csv"]);
 		});
 	});
 
@@ -303,50 +283,34 @@ describe("renderer format pure helpers", () => {
 		});
 
 		it("returns false when prefix has changed", () => {
-			expect(shouldResetInFlight(2, "photos/2026/", 2, "photos/")).toBe(
-				false,
-			);
+			expect(shouldResetInFlight(2, "photos/2026/", 2, "photos/")).toBe(false);
 		});
 	});
 
 	describe("shouldAutoPage", () => {
 		it("returns false when search is active", () => {
-			expect(shouldAutoPage(true, false, true, false, 95, 100)).toBe(
-				false,
-			);
+			expect(shouldAutoPage(true, false, true, false, 95, 100)).toBe(false);
 		});
 
 		it("returns false when page error is active", () => {
-			expect(shouldAutoPage(false, true, true, false, 95, 100)).toBe(
-				false,
-			);
+			expect(shouldAutoPage(false, true, true, false, 95, 100)).toBe(false);
 		});
 
 		it("returns false when request is in flight", () => {
-			expect(shouldAutoPage(false, false, true, true, 95, 100)).toBe(
-				false,
-			);
+			expect(shouldAutoPage(false, false, true, true, 95, 100)).toBe(false);
 		});
 
 		it("returns false when hasMore is false", () => {
-			expect(shouldAutoPage(false, false, false, false, 95, 100)).toBe(
-				false,
-			);
+			expect(shouldAutoPage(false, false, false, false, 95, 100)).toBe(false);
 		});
 
 		it("returns false when scroll position has not reached threshold", () => {
-			expect(shouldAutoPage(false, false, true, false, 90, 100)).toBe(
-				false,
-			);
+			expect(shouldAutoPage(false, false, true, false, 90, 100)).toBe(false);
 		});
 
 		it("returns true when near bottom, not in flight, has more, and no error", () => {
-			expect(shouldAutoPage(false, false, true, false, 95, 100)).toBe(
-				true,
-			);
-			expect(shouldAutoPage(false, false, true, false, 98, 100)).toBe(
-				true,
-			);
+			expect(shouldAutoPage(false, false, true, false, 95, 100)).toBe(true);
+			expect(shouldAutoPage(false, false, true, false, 98, 100)).toBe(true);
 		});
 	});
 
@@ -398,14 +362,7 @@ describe("renderer format pure helpers", () => {
 				inFlight = false;
 			}
 
-			const canAutoPage = shouldAutoPage(
-				false,
-				false,
-				true,
-				inFlight || loadingMore,
-				95,
-				100,
-			);
+			const canAutoPage = shouldAutoPage(false, false, true, inFlight || loadingMore, 95, 100);
 			expect(canAutoPage).toBe(true);
 		});
 	});

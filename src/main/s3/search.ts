@@ -1,8 +1,4 @@
-import {
-	ListObjectsV2Command,
-	type ListObjectsV2CommandOutput,
-	type S3Client,
-} from "@aws-sdk/client-s3";
+import { ListObjectsV2Command, type ListObjectsV2CommandOutput, type S3Client } from "@aws-sdk/client-s3";
 
 export const MAX_SEARCH_MATCHES = 10_000;
 
@@ -31,11 +27,7 @@ export interface SearchResult {
 	cancelled: boolean;
 }
 
-export function matchesQuery(
-	key: string,
-	prefix: string,
-	query: string,
-): boolean {
+export function matchesQuery(key: string, prefix: string, query: string): boolean {
 	const relativeKey = key.startsWith(prefix) ? key.slice(prefix.length) : key;
 	if (relativeKey.length === 0) return false;
 	return relativeKey.toLowerCase().includes(query.toLowerCase());
@@ -51,7 +43,7 @@ export async function runSearch(
 
 	let scanned = 0;
 	let matched = 0;
-	let continuationToken: string | undefined = undefined;
+	let continuationToken: string | undefined;
 	let truncated = false;
 
 	while (true) {

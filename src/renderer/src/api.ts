@@ -22,15 +22,8 @@ export function unwrap<T>(result: Result<T>): T {
 	if (result.ok) {
 		return result.data;
 	}
-	const err = new IpcErrorWrapper(
-		result.error.code,
-		result.error.message,
-		result.error.profile,
-	);
+	const err = new IpcErrorWrapper(result.error.code, result.error.message, result.error.profile);
 	throw err;
 }
 
-export const api =
-	typeof window !== "undefined"
-		? window.api
-		: (undefined as unknown as Api);
+export const api = typeof window !== "undefined" ? window.api : (undefined as unknown as Api);

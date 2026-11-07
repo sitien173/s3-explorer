@@ -1,7 +1,12 @@
 import { Button } from "./ui/button";
-import { useEffect, useMemo, useState, type JSX } from "react";
+import { BANNER_DESTRUCTIVE_CLASS, BANNER_SEPARATOR_CLASS } from "./ui/alert";
+import { Spinner } from "./ui/spinner";
+import { cn } from "../lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useEffectEvent, useMemo, useState, type JSX } from "react";
 import { api, unwrap } from "../api";
 import type { BrowserRow } from "../format";
+import { countPrefixQuery } from "../queries";
 import { AlertDialog as Dialog } from "@/components/ui/alert-dialog";
 import type { RenameResultReport } from "./RenameDialog";
 
@@ -32,10 +37,8 @@ export function ConfirmDeleteDialog({
 	onSuccess,
 	onFailure,
 }: ConfirmDeleteDialogProps): JSX.Element | null {
-	const [count, setCount] = useState<number | null>(null);
-	const [counting, setCounting] = useState<boolean>(false);
 	const [deleting, setDeleting] = useState<boolean>(false);
-	const [error, setError] = useState<string | null>(null);
+	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [progress, setProgress] = useState<{
 		done: number;
 		total: number;
@@ -46,79 +49,48 @@ export function ConfirmDeleteDialog({
 	const isMulti = deleteItems.length > 1;
 	const isMultiObject = isMulti && deleteItems.every((selected) => selected.kind === "object");
 	const hasFolderInMulti = isMulti && deleteItems.some((selected) => selected.kind === "folder");
-	const targetItem = deleteItems.length === 1 ? deleteItems[0] : (isMultiObject ? deleteItems[0] : item);
+	const targetItem = deleteItems.length === 1 ? deleteItems[0] : isMultiObject ? deleteItems[0] : item;
 	const isFolder = deleteItems.length === 1 && targetItem?.kind === "folder";
 
-	useEffect(() => {
-		if (!isOpen || deleteItems.length === 0) {
-			return;
-		}
-
-		setError(null);
+	const [resetKey, setResetKey] = useState({ isOpen, deleteItems });
+	if (resetKey.isOpen !== isOpen || resetKey.deleteItems !== deleteItems) {
+		setResetKey({ isOpen, deleteItems });
+		setDeleteError(null);
 		setDeleting(false);
 		setProgress(null);
+	}
 
-		if (hasFolderInMulti) {
-			setError("Folders cannot be multi-deleted.");
-			setCount(null);
-			setCounting(false);
-			return;
+	const countTarget =
+		isOpen && !hasFolderInMulti && !isMultiObject && targetItem?.kind === "folder" ? targetItem : null;
+	const countQuery = useQuery({
+		...countPrefixQuery({ connectionId, bucket, prefix: countTarget?.prefix ?? "" }),
+		enabled: countTarget !== null,
+	});
+	const counting = countTarget !== null && countQuery.isFetching;
+	const count = countTarget
+		? counting
+			? null
+			: (countQuery.data?.count ?? null)
+		: hasFolderInMulti
+			? null
+			: isMultiObject
+				? deleteItems.length
+				: targetItem?.kind === "object"
+					? 1
+					: null;
+	const countError = countTarget && !counting && countQuery.error ? countQuery.error : null;
+	const error = hasFolderInMulti
+		? "Folders cannot be multi-deleted."
+		: (deleteError ?? (countError ? countError.message || "Failed to count objects in folder" : null));
+
+	const notifyCountFailure = useEffectEvent(() => {
+		onFailure?.();
+	});
+	useEffect(() => {
+		if (countError) {
+			notifyCountFailure();
 		}
-
-		if (isMultiObject) {
-			setCount(deleteItems.length);
-			setCounting(false);
-			return;
-		}
-
-		if (!targetItem) {
-			setCount(null);
-			setCounting(false);
-			return;
-		}
-
-		if (targetItem.kind === "object") {
-			setCount(1);
-			setCounting(false);
-			return;
-		}
-
-		// Folder: call ops.countPrefix first
-		setCount(null);
-		setCounting(true);
-
-		let active = true;
-		void api.ops
-			.countPrefix({
-				connectionId,
-				bucket,
-				prefix: targetItem.prefix,
-			})
-			.then((res) => {
-				if (!active) {
-					return;
-				}
-				const data = unwrap(res);
-				setCount(data.count);
-				setCounting(false);
-			})
-			.catch((err: unknown) => {
-				if (!active) {
-					return;
-				}
-				setCounting(false);
-				const message =
-					err instanceof Error
-						? err.message
-						: "Failed to count objects in folder";
-				onFailure?.();
-				setError(message);
-			});
-
-		return () => {
-			active = false;
-		};
-	}, [isOpen, deleteItems, targetItem, isMultiObject, hasFolderInMulti, connectionId, bucket]);
+	}, [countError]);
 
 	async function handleDelete(): Promise<void> {
 		if (!targetItem || count === null || counting || hasFolderInMulti) {
@@ -126,7 +98,7 @@ export function ConfirmDeleteDialog({
 		}
 
 		setDeleting(true);
-		setError(null);
+		setDeleteError(null);
 
 		const opId = createOpId();
 		const unsubscribe = api.ops.onProgress((payload) => {
@@ -141,10 +113,7 @@ export function ConfirmDeleteDialog({
 					opId,
 					connectionId,
 					bucket,
-					keys: deleteItems.map(
-						(selected) =>
-							(selected as Extract<BrowserRow, { kind: "object" }>).key,
-					),
+					keys: deleteItems.map((selected) => (selected as Extract<BrowserRow, { kind: "object" }>).key),
 				});
 				const data = unwrap(res);
 
@@ -196,10 +165,9 @@ export function ConfirmDeleteDialog({
 			}
 			onClose();
 		} catch (err: unknown) {
-			const message =
-				err instanceof Error ? err.message : "Delete failed";
+			const message = err instanceof Error ? err.message : "Delete failed";
 			onFailure?.();
-			setError(message);
+			setDeleteError(message);
 		} finally {
 			unsubscribe();
 			setDeleting(false);
@@ -229,13 +197,8 @@ export function ConfirmDeleteDialog({
 			}
 			onClose={handleClose}
 			footer={
-				<div className="app-dialog-footer-actions">
-					<Button
-						type="button"
-						variant="secondary"
-						onClick={handleClose}
-						disabled={deleting}
-					>
+				<div className="flex w-full items-center justify-end gap-2">
+					<Button type="button" variant="secondary" onClick={handleClose} disabled={deleting}>
 						Cancel
 					</Button>
 					<Button
@@ -251,22 +214,20 @@ export function ConfirmDeleteDialog({
 				</div>
 			}
 		>
-			<div className="app-form-layout">
+			<div className="flex flex-col gap-3">
 				{error && (
-					<div className="tds-announcement tds-announcement--negative app-dialog-banner">
-						<div className="tds-announcement__content">
-							<div className="tds-announcement__message">{error}</div>
+					<div className={cn("mb-2 w-full", BANNER_DESTRUCTIVE_CLASS)}>
+						<div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+							<div className="text-sm text-foreground-secondary">{error}</div>
 						</div>
 					</div>
 				)}
 
 				{progress && (
-					<div className="tds-announcement tds-announcement--warning app-dialog-banner">
-						<div className="tds-announcement__content">
-							<div className="tds-announcement__title">
-								Deleting in progress
-							</div>
-							<div className="tds-announcement__message">
+					<div className={cn("mb-2 w-full", BANNER_SEPARATOR_CLASS)}>
+						<div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+							<div className="text-sm font-medium text-foreground">Deleting in progress</div>
+							<div className="text-sm text-foreground-secondary">
 								Deleting objects: {progress.done} of {progress.total}
 							</div>
 						</div>
@@ -274,32 +235,25 @@ export function ConfirmDeleteDialog({
 				)}
 
 				{counting ? (
-					<div className="app-dialog-counting-state">
-						<div className="tds-spinner tds-spinner--sm" />
-						<span>
-							Counting objects under {targetItem?.kind === "folder" ? targetItem.prefix : ""}...
-						</span>
+					<div className="flex items-center gap-2 p-3 text-sm text-foreground-secondary">
+						<Spinner className="size-6" />
+						<span>Counting objects under {targetItem?.kind === "folder" ? targetItem.prefix : ""}...</span>
 					</div>
 				) : count !== null && targetItem ? (
-					<div className="app-dialog-delete-prompt">
+					<div className="flex flex-col gap-1">
 						{targetItem.kind === "folder" ? (
-							<p className="app-dialog-delete-text">
-								Delete{" "}
-								<strong>{count.toLocaleString()}</strong>{" "}
-								{count === 1 ? "object" : "objects"} under{" "}
+							<p className="m-0 text-sm text-foreground">
+								Delete <strong>{count.toLocaleString()}</strong> {count === 1 ? "object" : "objects"} under{" "}
 								<code>{targetItem.prefix}</code>?
 							</p>
 						) : isMultiObject ? (
-							<p className="app-dialog-delete-text">Delete {deleteItems.length} objects?</p>
+							<p className="m-0 text-sm text-foreground">Delete {deleteItems.length} objects?</p>
 						) : (
-							<p className="app-dialog-delete-text">
-								Are you sure you want to delete{" "}
-								<code>{targetItem.key}</code>?
+							<p className="m-0 text-sm text-foreground">
+								Are you sure you want to delete <code>{targetItem.key}</code>?
 							</p>
 						)}
-						<p className="app-dialog-delete-subtext">
-							This action cannot be undone.
-						</p>
+						<p className="m-0 text-xs text-foreground-secondary">This action cannot be undone.</p>
 					</div>
 				) : null}
 			</div>

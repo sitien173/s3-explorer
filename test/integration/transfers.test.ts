@@ -17,12 +17,9 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DialogLike } from "../../src/main/ipc/ops";
-import { S3ClientFactory } from "../../src/main/s3/client";
+import type { S3ClientFactory } from "../../src/main/s3/client";
 import { channels, events } from "../../src/shared/channels";
-import {
-	transferDonePayloadSchema,
-	transferProgressPayloadSchema,
-} from "../../src/shared/ipc";
+import { transferDonePayloadSchema, transferProgressPayloadSchema } from "../../src/shared/ipc";
 import {
 	createIntegrationSender,
 	createTestBucket,
@@ -39,11 +36,7 @@ const largeObjectKey = "download-source/large.bin";
 const uploadCancelKey = "cancel-upload/large-fixture.bin";
 
 type SendOptions = { abortSignal?: AbortSignal };
-type SendHook = (
-	command: unknown,
-	options: SendOptions | undefined,
-	next: () => Promise<unknown>,
-) => Promise<unknown>;
+type SendHook = (command: unknown, options: SendOptions | undefined, next: () => Promise<unknown>) => Promise<unknown>;
 type Success<T> = { ok: true; data: T };
 type Failure = { ok: false; error: { code: string; message: string } };
 type Progress = {
@@ -83,21 +76,15 @@ const dialog: DialogLike = {
 const openDialogCalls: Parameters<DialogLike["showOpenDialog"]>[0][] = [];
 const saveDialogCalls: Parameters<DialogLike["showSaveDialog"]>[0][] = [];
 const clients: Pick<S3ClientFactory, "get" | "invalidate"> = {
-	get: async (connection) =>
-		wrapClient(await harness.factory.get(connection)),
+	get: async (connection) => wrapClient(await harness.factory.get(connection)),
 	invalidate: (connectionId) => harness.factory.invalidate(connectionId),
 };
 
 function wrapSend(client: S3Client, hook: SendHook): S3Client {
 	const wrapped = Object.create(client) as S3Client;
 	const baseSend = client.send.bind(client);
-	const send = (
-		command: unknown,
-		options?: SendOptions,
-	): Promise<unknown> =>
-		hook(command, options, () =>
-			baseSend(command as never, options as never),
-		);
+	const send = (command: unknown, options?: SendOptions): Promise<unknown> =>
+		hook(command, options, () => baseSend(command as never, options as never));
 	Object.defineProperty(wrapped, "send", { value: send });
 	return wrapped;
 }
@@ -119,24 +106,16 @@ async function invoke(
 	return handler({ sender }, input);
 }
 
-function progressFor(
-	sender: ReturnType<typeof createIntegrationSender>,
-	id: string,
-): Progress[] {
+function progressFor(sender: ReturnType<typeof createIntegrationSender>, id: string): Progress[] {
 	return sender.sent
 		.filter((entry) => entry.channel === events.transferProgress)
 		.map((entry) => transferProgressPayloadSchema.parse(entry.payload))
 		.filter((entry) => entry.transferId === id);
 }
 
-function doneFor(
-	sender: ReturnType<typeof createIntegrationSender>,
-	id: string,
-): Done | undefined {
+function doneFor(sender: ReturnType<typeof createIntegrationSender>, id: string): Done | undefined {
 	const entry = sender.sent.find(
-		(item) =>
-			item.channel === events.transferDone &&
-			(item.payload as { transferId: string }).transferId === id,
+		(item) => item.channel === events.transferDone && (item.payload as { transferId: string }).transferId === id,
 	);
 	return entry ? transferDonePayloadSchema.parse(entry.payload) : undefined;
 }
@@ -161,9 +140,7 @@ function expectProgressWithinSize(
 	expect(progress.length).toBeGreaterThan(0);
 	expect(progress[0]?.loaded).toBe(0);
 	for (let index = 1; index < progress.length; index++) {
-		expect(progress[index]!.loaded).toBeGreaterThanOrEqual(
-			progress[index - 1]!.loaded,
-		);
+		expect(progress[index]!.loaded).toBeGreaterThanOrEqual(progress[index - 1]!.loaded);
 	}
 	for (const event of progress) {
 		expect(event.loaded).toBeLessThanOrEqual(fileSize);
@@ -173,9 +150,7 @@ function expectProgressWithinSize(
 
 async function objectIsMissing(key: string): Promise<boolean> {
 	try {
-		await harness.s3Client.send(
-			new HeadObjectCommand({ Bucket: bucket, Key: key }),
-		);
+		await harness.s3Client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
 		return false;
 	} catch (error) {
 		if ((error as { name?: string }).name === "NotFound") return true;
@@ -184,16 +159,11 @@ async function objectIsMissing(key: string): Promise<boolean> {
 }
 
 async function multipartUploadsAreEmpty(): Promise<boolean> {
-	const output = await harness.s3Client.send(
-		new ListMultipartUploadsCommand({ Bucket: bucket }),
-	);
+	const output = await harness.s3Client.send(new ListMultipartUploadsCommand({ Bucket: bucket }));
 	return (output.Uploads ?? []).length === 0;
 }
 
-function delayOrAbort(
-	milliseconds: number,
-	signal?: AbortSignal,
-): Promise<void> {
+function delayOrAbort(milliseconds: number, signal?: AbortSignal): Promise<void> {
 	if (signal?.aborted) return Promise.reject(new Error("Aborted"));
 	return new Promise<void>((resolve, reject) => {
 		const timer = setTimeout(() => {
@@ -246,10 +216,7 @@ function gatedUploadClient(real: S3Client, key: string) {
 	let uploadPartCount = 0;
 	let passedGateCount = 0;
 	const client = wrapSend(real, async (command, options, next) => {
-		if (
-			command instanceof UploadPartCommand &&
-			command.input.Key === key
-		) {
+		if (command instanceof UploadPartCommand && command.input.Key === key) {
 			const partNumber = ++uploadPartCount;
 			await delayOrAbort(150, options?.abortSignal);
 			if (partNumber > 2) await gate.wait();
@@ -297,9 +264,7 @@ afterAll(async () => {
 	if (!harness) return;
 	try {
 		if (bucketCreated) {
-			const multipart = await harness.s3Client.send(
-				new ListMultipartUploadsCommand({ Bucket: bucket }),
-			);
+			const multipart = await harness.s3Client.send(new ListMultipartUploadsCommand({ Bucket: bucket }));
 			for (const upload of multipart.Uploads ?? []) {
 				if (!upload.Key || !upload.UploadId) continue;
 				await harness.s3Client.send(
@@ -353,9 +318,7 @@ describe("RustFS transfer IPC integration", () => {
 				owner,
 			),
 		);
-		expect(openDialogCalls).toEqual([
-			{ properties: ["openFile", "multiSelections"] },
-		]);
+		expect(openDialogCalls).toEqual([{ properties: ["openFile", "multiSelections"] }]);
 		expect(uploaded.transferIds).toHaveLength(1);
 		const uploadId = uploaded.transferIds[0]!;
 		const uploadDone = await waitForDone(owner, uploadId);
@@ -383,21 +346,15 @@ describe("RustFS transfer IPC integration", () => {
 		const downloadDone = await waitForDone(owner, downloadId);
 		expect(downloadDone.status).toBe("completed");
 		expectProgressWithinSize(owner, downloadId, roundTripBytes);
-		const [source, downloadedFile] = await Promise.all([
-			readFile(uploadPath),
-			readFile(downloadPath),
-		]);
-		expect(
-			createHash("sha256").update(downloadedFile).digest("hex"),
-		).toBe(createHash("sha256").update(source).digest("hex"));
+		const [source, downloadedFile] = await Promise.all([readFile(uploadPath), readFile(downloadPath)]);
+		expect(createHash("sha256").update(downloadedFile).digest("hex")).toBe(
+			createHash("sha256").update(source).digest("hex"),
+		);
 	});
 
 	it("cancels a gated upload and cleans up multipart state", async () => {
 		openPaths = [largeFile];
-		const gated = gatedUploadClient(
-			await harness.factory.get(harness.connection),
-			uploadCancelKey,
-		);
+		const gated = gatedUploadClient(await harness.factory.get(harness.connection), uploadCancelKey);
 		wrapClient = () => gated.client;
 		const owner = createIntegrationSender();
 		let cancelResponse: Promise<unknown> | undefined;
@@ -405,20 +362,12 @@ describe("RustFS transfer IPC integration", () => {
 		const normalSend = owner.send.bind(owner);
 		owner.send = (channel, payload) => {
 			normalSend(channel, payload);
-			if (
-				channel !== events.transferProgress ||
-				cancelResponse ||
-				(payload as Progress).loaded <= 0
-			) {
+			if (channel !== events.transferProgress || cancelResponse || (payload as Progress).loaded <= 0) {
 				return;
 			}
 			cancelLoaded = (payload as Progress).loaded;
 			const transferId = (payload as Progress).transferId;
-			cancelResponse = invoke(
-				channels.transfersCancel,
-				{ transferId },
-				owner,
-			).finally(() => gated.gate.release());
+			cancelResponse = invoke(channels.transfersCancel, { transferId }, owner).finally(() => gated.gate.release());
 		};
 
 		try {
@@ -459,10 +408,7 @@ describe("RustFS transfer IPC integration", () => {
 		savePath = destination;
 		wrapClient = (client) =>
 			wrapSend(client, async (command, options, next) => {
-				if (
-					!(command instanceof GetObjectCommand) ||
-					command.input.Key !== largeObjectKey
-				) {
+				if (!(command instanceof GetObjectCommand) || command.input.Key !== largeObjectKey) {
 					return next();
 				}
 				const response = (await next()) as {
@@ -486,11 +432,7 @@ describe("RustFS transfer IPC integration", () => {
 									reject(new Error("Aborted"));
 									return;
 								}
-								signal?.addEventListener(
-									"abort",
-									() => reject(new Error("Aborted")),
-									{ once: true },
-								);
+								signal?.addEventListener("abort", () => reject(new Error("Aborted")), { once: true });
 							});
 						} finally {
 							source.destroy();
@@ -505,19 +447,11 @@ describe("RustFS transfer IPC integration", () => {
 		const normalSend = owner.send.bind(owner);
 		owner.send = (channel, payload) => {
 			normalSend(channel, payload);
-			if (
-				channel !== events.transferProgress ||
-				cancelResponse ||
-				(payload as Progress).loaded <= 0
-			) {
+			if (channel !== events.transferProgress || cancelResponse || (payload as Progress).loaded <= 0) {
 				return;
 			}
 			cancelLoaded = (payload as Progress).loaded;
-			cancelResponse = invoke(
-				channels.transfersCancel,
-				{ transferId: (payload as Progress).transferId },
-				owner,
-			);
+			cancelResponse = invoke(channels.transfersCancel, { transferId: (payload as Progress).transferId }, owner);
 		};
 		const response = success<{ transferId: string | null }>(
 			await invoke(
@@ -587,21 +521,14 @@ describe("RustFS transfer IPC integration", () => {
 		expect(response.transferIds).toHaveLength(1);
 		const transferId = response.transferIds[0]!;
 		expect((await waitForDone(owner, transferId)).status).toBe("completed");
-		const head = await harness.s3Client.send(
-			new HeadObjectCommand({ Bucket: bucket, Key: "verified/zero-byte.bin" }),
-		);
+		const head = await harness.s3Client.send(new HeadObjectCommand({ Bucket: bucket, Key: "verified/zero-byte.bin" }));
 		expect(head.ContentLength).toBe(0);
 		expectProgressWithinSize(owner, transferId, 0);
-		expect(progressFor(owner, transferId).map((event) => event.key)).toContain(
-			"verified/zero-byte.bin",
-		);
+		expect(progressFor(owner, transferId).map((event) => event.key)).toContain("verified/zero-byte.bin");
 	});
 
 	it("destroys the sender during a gated upload without later events", async () => {
-		const gated = gatedUploadClient(
-			await harness.factory.get(harness.connection),
-			"destroy-upload/large-fixture.bin",
-		);
+		const gated = gatedUploadClient(await harness.factory.get(harness.connection), "destroy-upload/large-fixture.bin");
 		wrapClient = () => gated.client;
 		openPaths = [largeFile];
 		const owner = createIntegrationSender();
@@ -611,11 +538,7 @@ describe("RustFS transfer IPC integration", () => {
 		const normalSend = owner.send.bind(owner);
 		owner.send = (channel, payload) => {
 			normalSend(channel, payload);
-			if (
-				channel === events.transferProgress &&
-				sentWhenDestroyed < 0 &&
-				(payload as Progress).loaded > 0
-			) {
+			if (channel === events.transferProgress && sentWhenDestroyed < 0 && (payload as Progress).loaded > 0) {
 				destroyedLoaded = (payload as Progress).loaded;
 				destroyedTransferId = (payload as Progress).transferId;
 				destroySender(owner);
@@ -637,15 +560,10 @@ describe("RustFS transfer IPC integration", () => {
 			expect(destroyedLoaded).toBeGreaterThan(0);
 			expectProgressWithinSize(owner, destroyedTransferId, multipartBytes);
 			expect(sentWhenDestroyed).toBeGreaterThan(0);
-			await waitFor(
-				() => (owner.listeners.get("destroyed")?.length ?? 0) === 0,
-				30_000,
-			);
+			await waitFor(() => (owner.listeners.get("destroyed")?.length ?? 0) === 0, 30_000);
 			await waitFor(multipartUploadsAreEmpty, 30_000);
 			expect(owner.sent).toHaveLength(sentWhenDestroyed);
-			expect(
-				owner.sent.some((entry) => entry.channel === events.transferDone),
-			).toBe(false);
+			expect(owner.sent.some((entry) => entry.channel === events.transferDone)).toBe(false);
 		} finally {
 			gated.gate.release();
 		}

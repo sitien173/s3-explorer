@@ -1,14 +1,15 @@
 import { Button } from "./ui/button";
-import {
-	useEffect,
-	useId,
-	useState,
-	type FormEvent,
-	type JSX,
-} from "react";
+import { BANNER_DESTRUCTIVE_CLASS, BANNER_SEPARATOR_CLASS } from "./ui/alert";
+import { cn } from "../lib/utils";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useId, useMemo, useState, type JSX } from "react";
+import { useForm } from "react-hook-form";
 import { api, unwrap } from "../api";
 import type { BrowserRow } from "../format";
+import { renameFormSchema } from "../forms";
 import { Dialog } from "@/components/ui/dialog";
+import { FieldError } from "./ui/field";
+import { Input } from "./ui/input";
 
 export interface RenameResultReport {
 	completedCount: number;
@@ -42,15 +43,26 @@ export function RenameDialog({
 	onFailure,
 }: RenameDialogProps): JSX.Element | null {
 	const targetKeyId = useId();
-	const [targetKey, setTargetKey] = useState<string>("");
-	const [submitting, setSubmitting] = useState<boolean>(false);
-	const [error, setError] = useState<string | null>(null);
+	const isFolder = item?.kind === "folder";
+	const currentKey = item ? (isFolder ? item.prefix : item.key) : "";
+	const schema = useMemo(() => renameFormSchema(isFolder, currentKey), [isFolder, currentKey]);
+	const {
+		register,
+		handleSubmit,
+		reset,
+		watch,
+		setError,
+		clearErrors,
+		formState: { errors, isSubmitting: submitting },
+	} = useForm<{ targetKey: string }, unknown, { targetKey: string }>({
+		resolver: zodResolver(schema),
+		defaultValues: { targetKey: currentKey },
+	});
+	const targetKey = watch("targetKey");
 	const [progress, setProgress] = useState<{
 		done: number;
 		total: number;
 	} | null>(null);
-
-	const isFolder = item?.kind === "folder";
 
 	function handleClose(): void {
 		if (submitting) {
@@ -61,41 +73,15 @@ export function RenameDialog({
 
 	useEffect(() => {
 		if (isOpen && item) {
-			setTargetKey(isFolder ? item.prefix : item.key);
-			setError(null);
-			setSubmitting(false);
+			reset({ targetKey: currentKey });
 			setProgress(null);
 		}
-	}, [isOpen, item, isFolder]);
+	}, [isOpen, item, currentKey, reset]);
 
-	async function handleSubmit(e: FormEvent): Promise<void> {
-		e.preventDefault();
+	async function onValid({ targetKey: trimmed }: { targetKey: string }): Promise<void> {
 		if (!item) {
 			return;
 		}
-
-		let trimmed = targetKey.trim();
-		if (!trimmed) {
-			setError("Target name cannot be empty.");
-			return;
-		}
-
-		if (isFolder && !trimmed.endsWith("/")) {
-			trimmed = `${trimmed}/`;
-		}
-		if (!isFolder && trimmed.endsWith("/")) {
-			setError("Object key cannot end with a slash.");
-			return;
-		}
-
-		const currentKey = isFolder ? item.prefix : item.key;
-		if (trimmed === currentKey) {
-			setError("Target name must be different from current name.");
-			return;
-		}
-
-		setSubmitting(true);
-		setError(null);
 
 		if (isFolder) {
 			const opId = createOpId();
@@ -126,13 +112,11 @@ export function RenameDialog({
 				}
 				onClose();
 			} catch (err: unknown) {
-				const message =
-					err instanceof Error ? err.message : "Rename failed";
+				const message = err instanceof Error ? err.message : "Rename failed";
 				onFailure?.();
-				setError(message);
+				setError("root.server", { message });
 			} finally {
 				unsubscribe();
-				setSubmitting(false);
 			}
 		} else {
 			try {
@@ -146,12 +130,9 @@ export function RenameDialog({
 				onSuccess(undefined, trimmed);
 				onClose();
 			} catch (err: unknown) {
-				const message =
-					err instanceof Error ? err.message : "Rename failed";
+				const message = err instanceof Error ? err.message : "Rename failed";
 				onFailure?.();
-				setError(message);
-			} finally {
-				setSubmitting(false);
+				setError("root.server", { message });
 			}
 		}
 	}
@@ -162,21 +143,11 @@ export function RenameDialog({
 			title={isFolder ? "Rename or move folder" : "Rename or move object"}
 			onClose={handleClose}
 			footer={
-				<div className="app-dialog-footer-actions">
-					<Button
-						type="button"
-						variant="secondary"
-						onClick={handleClose}
-						disabled={submitting}
-					>
+				<div className="flex w-full items-center justify-end gap-2">
+					<Button type="button" variant="secondary" onClick={handleClose} disabled={submitting}>
 						Cancel
 					</Button>
-					<Button
-						type="submit"
-						form="app-rename-form"
-						variant="default"
-						disabled={submitting || !targetKey.trim()}
-					>
+					<Button type="submit" form="app-rename-form" variant="default" disabled={submitting || !targetKey.trim()}>
 						{submitting ? "Renaming..." : "Rename"}
 					</Button>
 				</div>
@@ -185,56 +156,51 @@ export function RenameDialog({
 			<form
 				id="app-rename-form"
 				onSubmit={(e) => {
-					void handleSubmit(e);
+					void handleSubmit(onValid)(e);
 				}}
-				className="app-form-layout"
+				className="flex flex-col gap-3"
 			>
-				{error && (
-					<div className="tds-announcement tds-announcement--negative app-dialog-banner">
-						<div className="tds-announcement__content">
-							<div className="tds-announcement__message">{error}</div>
+				{errors.root?.server?.message && (
+					<div className={cn("mb-2 w-full", BANNER_DESTRUCTIVE_CLASS)}>
+						<div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+							<div className="text-sm text-foreground-secondary">{errors.root.server.message}</div>
 						</div>
 					</div>
 				)}
 
 				{progress && (
-					<div className="tds-announcement tds-announcement--warning app-dialog-banner">
-						<div className="tds-announcement__content">
-							<div className="tds-announcement__title">
-								Renaming in progress
-							</div>
-							<div className="tds-announcement__message">
+					<div className={cn("mb-2 w-full", BANNER_SEPARATOR_CLASS)}>
+						<div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+							<div className="text-sm font-medium text-foreground">Renaming in progress</div>
+							<div className="text-sm text-foreground-secondary">
 								Moving objects: {progress.done} of {progress.total}
 							</div>
 						</div>
 					</div>
 				)}
 
-				<div className="tds-text-input">
-					<label
-						className="tds-field-label"
-						htmlFor={targetKeyId}
-					>
+				<div className="flex w-full min-w-0 flex-col gap-1">
+					<label className="text-xs font-medium text-foreground" htmlFor={targetKeyId}>
 						{isFolder ? "Target prefix (required)" : "Target key (required)"}
 					</label>
-					<input
+					<Input
 						id={targetKeyId}
 						type="text"
-						className="tds-text-input__field"
-						value={targetKey}
-						onChange={(e) => {
-							setTargetKey(e.target.value);
-							setError(null);
-						}}
+						{...register("targetKey", {
+							onChange: () => {
+								clearErrors("root.server");
+							},
+						})}
 						disabled={submitting}
 						required
 						autoFocus
 					/>
-					<span className="tds-field-caption">
+					<span className="text-xs text-foreground-secondary">
 						{isFolder
 							? "Enter new folder prefix. Slashing ending will be added if omitted."
 							: "Enter the new destination key for this object."}
 					</span>
+					<FieldError error={errors.targetKey} />
 				</div>
 			</form>
 		</Dialog>

@@ -27,11 +27,7 @@ type CommandLike = {
 	input: Record<string, unknown>;
 };
 type SendOptions = { abortSignal?: AbortSignal };
-type SendHook = (
-	command: unknown,
-	options: SendOptions | undefined,
-	next: () => Promise<unknown>,
-) => Promise<unknown>;
+type SendHook = (command: unknown, options: SendOptions | undefined, next: () => Promise<unknown>) => Promise<unknown>;
 
 type IpcError = { code: string; message: string };
 type PartialResult = {
@@ -48,20 +44,14 @@ let wrapClient = (client: S3Client): S3Client => client;
 const clients = {
 	get: async (connection: Parameters<IntegrationHarness["factory"]["get"]>[0]) =>
 		wrapClient(await harness.factory.get(connection)),
-	invalidate: (connectionId: string) =>
-		harness.factory.invalidate(connectionId),
+	invalidate: (connectionId: string) => harness.factory.invalidate(connectionId),
 };
 
 function wrapSend(client: S3Client, hook: SendHook): S3Client {
 	const wrapped = Object.create(client) as S3Client;
 	const baseSend = client.send.bind(client);
-	const send = (
-		command: unknown,
-		options?: SendOptions,
-	): Promise<unknown> =>
-		hook(command, options, () =>
-			baseSend(command as never, options as never),
-		);
+	const send = (command: unknown, options?: SendOptions): Promise<unknown> =>
+		hook(command, options, () => baseSend(command as never, options as never));
 	Object.defineProperty(wrapped, "send", { value: send });
 	return wrapped;
 }
@@ -84,11 +74,7 @@ function failure(response: unknown): IpcError {
 	return result.error;
 }
 
-async function invoke(
-	channel: string,
-	input: unknown,
-	sender = createIntegrationSender(),
-): Promise<unknown> {
+async function invoke(channel: string, input: unknown, sender = createIntegrationSender()): Promise<unknown> {
 	const handler = harness.handlers.get(channel);
 	if (!handler) throw new Error(`Missing IPC handler for ${channel}`);
 	return handler({ sender }, input);
@@ -113,9 +99,7 @@ async function keysWithPrefix(prefix: string): Promise<string[]> {
 
 async function objectExists(key: string): Promise<boolean> {
 	try {
-		await harness.s3Client.send(
-			new HeadObjectCommand({ Bucket: bucket, Key: key }),
-		);
+		await harness.s3Client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
 		return true;
 	} catch (error) {
 		if ((error as { name?: string }).name === "NotFound") return false;
@@ -124,17 +108,13 @@ async function objectExists(key: string): Promise<boolean> {
 }
 
 async function objectBytes(key: string): Promise<Uint8Array> {
-	const result = await harness.s3Client.send(
-		new GetObjectCommand({ Bucket: bucket, Key: key }),
-	);
+	const result = await harness.s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
 	if (!result.Body) throw new Error(`Missing body for ${key}`);
 	return result.Body.transformToByteArray();
 }
 
 async function put(key: string, body: string): Promise<void> {
-	await harness.s3Client.send(
-		new PutObjectCommand({ Bucket: bucket, Key: key, Body: body }),
-	);
+	await harness.s3Client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body }));
 }
 
 afterEach(() => {
@@ -160,9 +140,7 @@ afterAll(async () => {
 
 describe("integration waitFor helper", () => {
 	it("rejects with a clear timeout message", async () => {
-		await expect(waitFor(() => false, 1)).rejects.toThrow(
-			"waitFor timed out after 1 ms",
-		);
+		await expect(waitFor(() => false, 1)).rejects.toThrow("waitFor timed out after 1 ms");
 	});
 });
 
@@ -177,9 +155,7 @@ describe("RustFS operation IPC integration", () => {
 			}),
 		);
 		expect(result).toEqual({ key: "created/" });
-		const marker = await harness.s3Client.send(
-			new HeadObjectCommand({ Bucket: bucket, Key: "created/" }),
-		);
+		const marker = await harness.s3Client.send(new HeadObjectCommand({ Bucket: bucket, Key: "created/" }));
 		expect(marker.ContentLength).toBe(0);
 		const listed = success<{ folders: string[]; objects: { key: string }[] }>(
 			await invoke(channels.objectsList, {
@@ -192,10 +168,7 @@ describe("RustFS operation IPC integration", () => {
 	});
 
 	it("deletes 2,500 keys in three batches and verifies all are gone", async () => {
-		const keys = Array.from(
-			{ length: 2500 },
-			(_, index) => `bulk/key-${index.toString().padStart(4, "0")}`,
-		);
+		const keys = Array.from({ length: 2500 }, (_, index) => `bulk/key-${index.toString().padStart(4, "0")}`);
 		await seedObjects(
 			harness.s3Client,
 			bucket,
@@ -225,22 +198,15 @@ describe("RustFS operation IPC integration", () => {
 		expect(result.remaining).toEqual([]);
 		expect(result.error).toBeUndefined();
 		expect(await keysWithPrefix("bulk/")).toEqual([]);
-		const progress = sender.sent.filter(
-			(entry) => entry.channel === events.opsProgress,
-		);
+		const progress = sender.sent.filter((entry) => entry.channel === events.opsProgress);
 		expect(progress).toHaveLength(3);
 		for (const event of progress) {
-			expect(opsProgressPayloadSchema.parse(event.payload)).toEqual(
-				event.payload,
-			);
+			expect(opsProgressPayloadSchema.parse(event.payload)).toEqual(event.payload);
 		}
 	});
 
 	it("counts a prefix before deleting it", async () => {
-		const keys = Array.from(
-			{ length: 12 },
-			(_, index) => `remove/key-${index.toString().padStart(2, "0")}`,
-		);
+		const keys = Array.from({ length: 12 }, (_, index) => `remove/key-${index.toString().padStart(2, "0")}`);
 		await seedObjects(
 			harness.s3Client,
 			bucket,
@@ -268,19 +234,12 @@ describe("RustFS operation IPC integration", () => {
 	});
 
 	it("renames keys containing spaces, unicode, plus, and percent encoding", async () => {
-		const names = [
-			"spaced name.txt",
-			"café.txt",
-			"plus+sign.txt",
-			"percent%25.txt",
-		];
+		const names = ["spaced name.txt", "café.txt", "plus+sign.txt", "percent%25.txt"];
 		for (const [index, name] of names.entries()) {
 			const fromKey = `special/from/${name}`;
 			const toKey = `special/to/${name}`;
 			const bytes = Buffer.from(`fixture-${index}`);
-			await harness.s3Client.send(
-				new PutObjectCommand({ Bucket: bucket, Key: fromKey, Body: bytes }),
-			);
+			await harness.s3Client.send(new PutObjectCommand({ Bucket: bucket, Key: fromKey, Body: bytes }));
 			const result = success<{ key: string }>(
 				await invoke(channels.opsRename, {
 					connectionId: harness.connection.id,
@@ -308,12 +267,8 @@ describe("RustFS operation IPC integration", () => {
 			code: "CONFLICT",
 			message: "Destination exists",
 		});
-		expect(Buffer.from(await objectBytes("conflict/source.txt")).toString()).toBe(
-			"source-bytes",
-		);
-		expect(
-			Buffer.from(await objectBytes("conflict/destination.txt")).toString(),
-		).toBe("destination-bytes");
+		expect(Buffer.from(await objectBytes("conflict/source.txt")).toString()).toBe("source-bytes");
+		expect(Buffer.from(await objectBytes("conflict/destination.txt")).toString()).toBe("destination-bytes");
 	});
 
 	it("rejects a same-key rename as INVALID_REQUEST", async () => {
@@ -357,11 +312,7 @@ describe("RustFS operation IPC integration", () => {
 	});
 
 	it("reports exact partial state when a prefix copy fails", async () => {
-		const sources = [
-			"partial-copy/a.txt",
-			"partial-copy/b.txt",
-			"partial-copy/c.txt",
-		];
+		const sources = ["partial-copy/a.txt", "partial-copy/b.txt", "partial-copy/c.txt"];
 		await seedObjects(
 			harness.s3Client,
 			bucket,
@@ -369,10 +320,7 @@ describe("RustFS operation IPC integration", () => {
 		);
 		wrapClient = (client) =>
 			wrapSend(client, async (command, _options, next) => {
-				if (
-					command instanceof CopyObjectCommand &&
-					inputOf(command).Key === "partial-copy-dest/b.txt"
-				) {
+				if (command instanceof CopyObjectCommand && inputOf(command).Key === "partial-copy-dest/b.txt") {
 					throw Object.assign(new Error("Injected copy failure"), {
 						name: "InjectedFailure",
 					});
@@ -401,11 +349,7 @@ describe("RustFS operation IPC integration", () => {
 	});
 
 	it("reports a copied-but-not-deleted key as remaining", async () => {
-		const sources = [
-			"partial-delete/a.txt",
-			"partial-delete/b.txt",
-			"partial-delete/c.txt",
-		];
+		const sources = ["partial-delete/a.txt", "partial-delete/b.txt", "partial-delete/c.txt"];
 		await seedObjects(
 			harness.s3Client,
 			bucket,
@@ -413,10 +357,7 @@ describe("RustFS operation IPC integration", () => {
 		);
 		wrapClient = (client) =>
 			wrapSend(client, async (command, _options, next) => {
-				if (
-					command instanceof DeleteObjectCommand &&
-					inputOf(command).Key === "partial-delete/b.txt"
-				) {
+				if (command instanceof DeleteObjectCommand && inputOf(command).Key === "partial-delete/b.txt") {
 					throw Object.assign(new Error("Injected delete failure"), {
 						name: "InjectedFailure",
 					});
