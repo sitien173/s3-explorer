@@ -142,7 +142,7 @@ async function _expectModalKeyboardBehavior(
 	const trigger = screen.getByRole("button", { name: "Open test dialog" });
 	await user.click(trigger);
 	const modal = screen.getByRole(role, { name });
-	expect(modal.contains(document.activeElement)).toBe(true);
+	await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 	await user.tab();
 	expect(modal.contains(document.activeElement)).toBe(true);
 	await user.keyboard("{Escape}");
@@ -176,7 +176,7 @@ describe("renderer dialog components", () => {
 		])
 			expect(screen.getByLabelText(label)).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Save connection" })).toBeTruthy();
-		expect(modal.contains(document.activeElement)).toBe(true);
+		await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 		await user.tab();
 		expect(modal.contains(document.activeElement)).toBe(true);
 		await user.keyboard("{Escape}");
@@ -193,6 +193,7 @@ describe("renderer dialog components", () => {
 		const modal = screen.getByRole("dialog", { name: "Add bucket by name" });
 		expect(screen.getByLabelText("Bucket name (required)")).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Add bucket" })).toBeTruthy();
+		await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 		await user.tab();
 		expect(modal.contains(document.activeElement)).toBe(true);
 		await user.keyboard("{Escape}");
@@ -449,6 +450,7 @@ describe("renderer dialog components", () => {
 		const modal = screen.getByRole("dialog", { name: "Rename or move object" });
 		expect(screen.getByLabelText("Target key (required)")).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Rename" })).toBeTruthy();
+		await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 		await user.tab();
 		expect(modal.contains(document.activeElement)).toBe(true);
 		await user.keyboard("{Escape}");
@@ -689,7 +691,7 @@ describe("renderer dialog components", () => {
 		await user.click(screen.getByRole("button", { name: "Open test dialog" }));
 		const modal = screen.getByRole("alertdialog", { name: "Delete object" });
 		expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
-		expect(modal.contains(document.activeElement)).toBe(true);
+		await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 		await user.tab();
 		expect(modal.contains(document.activeElement)).toBe(true);
 		await user.keyboard("{Escape}");
@@ -707,6 +709,7 @@ describe("renderer dialog components", () => {
 		expect(screen.getByLabelText("URL (required)")).toBeTruthy();
 		expect((screen.getByLabelText("Signing connection") as HTMLSelectElement).value).toBe("anonymous");
 		expect(screen.getByRole("button", { name: "Open", exact: true })).toBeTruthy();
+		await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 		await user.tab();
 		expect(modal.contains(document.activeElement)).toBe(true);
 		await user.keyboard("{Escape}");
@@ -722,6 +725,7 @@ describe("renderer dialog components", () => {
 		await user.click(screen.getByRole("button", { name: "Open test dialog" }));
 		const modal = screen.getByRole("dialog", { name: "Operation report" });
 		expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+		await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 		await user.tab();
 		expect(modal.contains(document.activeElement)).toBe(true);
 		await user.keyboard("{Escape}");
@@ -753,7 +757,7 @@ describe("renderer dialog components", () => {
 		expect(screen.getByLabelText("Folder name (required)")).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Create folder" })).toBeTruthy();
-		expect(modal.contains(document.activeElement)).toBe(true);
+		await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true));
 		await user.tab();
 		expect(modal.contains(document.activeElement)).toBe(true);
 		await user.keyboard("{Escape}");
