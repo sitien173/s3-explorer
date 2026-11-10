@@ -20,7 +20,7 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "build": "electron-vite build",
-    "dist": "electron-vite build && electron-builder --linux AppImage deb",
+    "dist": "electron-vite build && electron-builder --linux AppImage deb --publish never",
     "e2e": "playwright test",
     "dev": "electron-vite dev",
     "seek:2gb": "jiti scripts/seek-2gb.ts",
