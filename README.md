@@ -50,6 +50,8 @@ Integration tests and end-to-end tests share RustFS on port 19000. Run them sequ
 building, `bash scripts/smoke-appimage.sh` launches the AppImage in an isolated
 headless profile.
 
+To publish a release, set `version` in `package.json`, commit, then push a matching tag such as `git tag v0.1.0 && git push origin v0.1.0`. The Release workflow runs the checks, builds both packages, smoke-tests the AppImage, and attaches them to a GitHub release.
+
 ## User Interface
 
 - **Theme:** The application follows system light and dark mode automatically via `prefers-color-scheme` and `nativeTheme`. There is no in-app theme toggle.
