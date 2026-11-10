@@ -1,0 +1,29 @@
+title: S3 Media Explorer
+description: A Linux desktop app for browsing, managing, and streaming S3 media.
+url: https://sitien173.github.io
+baseurl: /s3-explorer
+
+remote_theme: just-the-docs/just-the-docs@v0.12.0
+plugins:
+  - jekyll-remote-theme
+  - jekyll-include-cache
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+search_enabled: true
+heading_anchors: true
+back_to_top: true
+back_to_top_text: Back to top
+
+aux_links:
+  GitHub: https://github.com/sitien173/s3-explorer
+aux_links_new_tab: true
+
+gh_edit_link: true
+gh_edit_link_text: Edit this page on GitHub
+gh_edit_repository: https://github.com/sitien173/s3-explorer
+gh_edit_branch: main
+gh_edit_source: site
+gh_edit_view_mode: tree
+
+footer_content: Released under the <a href="https://github.com/sitien173/s3-explorer/blob/main/LICENSE">MIT License</a>.
