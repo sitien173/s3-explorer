@@ -10,7 +10,7 @@ linux:
     - AppImage
     - deb
   category: Utility
-  maintainer: S3 Media Explorer Maintainers <maintainers@example.invalid>
+  maintainer: Tien Ngo <tienngo@ankvn.com>
   icon: build/icon.png
 deb:
   depends:

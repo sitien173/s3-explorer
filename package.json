@@ -3,8 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "description": "A Linux desktop app for browsing, managing, and streaming S3 media.",
-  "author": "S3 Media Explorer Maintainers <maintainers@example.invalid>",
-  "homepage": "https://example.invalid/s3-media-explorer",
+  "author": "Tien Ngo <tienngo@ankvn.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/sitien173/s3-explorer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sitien173/s3-explorer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sitien173/s3-explorer/issues"
+  },
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
